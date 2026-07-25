@@ -5,6 +5,8 @@ import express from "express"
 import url from "url"
 import urljoin from "url-join"
 import csrf from "csurf"
+
+import { Client } from "ldapts"
 import { hydraAdmin } from "../config"
 import { oidcConformityMaybeFakeAcr } from "./stub/oidc-cert"
 
@@ -16,12 +18,41 @@ const csrfProtection = csrf({
 })
 const router = express.Router()
 
+// Configuration LDAP via variables d'environnement (avec valeurs par défaut)
+const LDAP_URL = process.env.LDAP_URL || "ldap://localhost:389"
+const LDAP_USER_DN_PATTERN = process.env.LDAP_USER_DN_PATTERN || "uid={username},ou=users,dc=domaine,dc=fr"
+
+/**
+ * Helper d'authentification LDAP (Bind)
+ * Vérifie le nom d'utilisateur et le hash Argon2id transmis par le client
+ */
+async function authenticateWithLdap(username: string, derivedPasswordHash: string): Promise<boolean> {
+  const userDn = LDAP_USER_DN_PATTERN.replace("{username}", username)
+  const client = new Client({ url: LDAP_URL })
+
+  try {
+    await client.bind(userDn, derivedPasswordHash)
+    await client.unbind()
+    return true
+  } catch (error) {
+    // Si la liaison (bind) échoue, les identifiants ou la clé dérivée sont invalides
+    try {
+      await client.unbind()
+    } catch {
+      // Ignorer l'erreur de fermeture si déjà déconnecté
+    }
+    return false
+  }
+}
+
+// Route GET : Affiche la vue ou traite le "skip" si l'utilisateur est déjà connecté
 router.get("/", csrfProtection, (req, res, next) => {
   // Parses the URL query
   const query = url.parse(req.url, true).query
 
   // The challenge is used to fetch information about the login request from ORY Hydra.
   const challenge = String(query.login_challenge)
+
   if (!challenge) {
     next(new Error("Expected a login challenge to be set but received none."))
     return
@@ -66,99 +97,69 @@ router.get("/", csrfProtection, (req, res, next) => {
     .catch(next)
 })
 
-router.post("/", csrfProtection, (req, res, next) => {
   // The challenge is now a hidden input field, so let's take it from the request body instead
+router.post("/", csrfProtection, async (req, res, next) => {
   const challenge = req.body.challenge
 
   // Let's see if the user decided to accept or reject the consent request..
   if (req.body.submit === "Deny access") {
     // Looks like the consent request was denied by the user
-    return (
-      hydraAdmin
-        .rejectOAuth2LoginRequest({
-          loginChallenge: challenge,
-          rejectOAuth2Request: {
-            error: "access_denied",
-            error_description: "The resource owner denied the request",
-          },
-        })
-        .then(({ redirect_to }) => {
+    return hydraAdmin
+      .rejectOAuth2LoginRequest({
+        loginChallenge: challenge,
+        rejectOAuth2Request: {
+          error: "access_denied",
+          error_description: "The resource owner denied the request",
+        },
+      })
+      .then(({ redirect_to }) => {
           // All we need to do now is to redirect the browser back to hydra!
-          res.redirect(String(redirect_to))
-        })
-        // This will handle any error that happens when making HTTP calls to hydra
-        .catch(next)
-    )
+        res.redirect(String(redirect_to))
+      })
+      .catch(next)
   }
 
-  // Let's check if the user provided valid credentials. Of course, you'd use a database or some third-party service
-  // for this!
-  if (!(req.body.email === "foo@bar.com" && req.body.password === "foobar")) {
-    // Looks like the user provided invalid credentials, let's show the ui again...
+  const username = String(req.body.email || "").trim()
+  const derivedPassword = String(req.body.password || "")
 
-    res.render("login", {
+  // 2. Validation auprès du serveur LDAP
+  const isAuthenticated = await authenticateWithLdap(username, derivedPassword)
+
+  if (!isAuthenticated) {
+    // Identifiants ou dérivation Argon2id incorrecte
+    return res.render("login", {
       csrfToken: req.csrfToken(),
       challenge: challenge,
-      error: "The username / password combination is not correct",
+      action: urljoin(process.env.BASE_URL || "", "/login"),
+      hint: username,
+      error: "Identifiant ou mot de passe incorrect.",
+    })
+  }
+  // Seems like the user authenticated! Let's tell hydra...
+  // 3. Validation de la connexion auprès d'Ory Hydra
+  try {
+    const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
+    
+    const { redirect_to } = await hydraAdmin.acceptOAuth2LoginRequest({
+      loginChallenge: challenge,
+      acceptOAuth2LoginRequest: {
+        // Le `subject` est l'identifiant unique OIDC (username/email transmis à Stalwart/CryptPad)
+        subject: username,
+
+        // Mémorisation de la session SSO
+        remember: Boolean(req.body.remember),
+        remember_for: 28800, // 8 heures de session SSO (3600*8)
+
+        // Contexte additionnel pour la conformité OIDC
+        acr: oidcConformityMaybeFakeAcr(loginRequest, "0"),
+      },
     })
 
-    return
+    // Redirection vers le serveur Hydra
+    res.redirect(String(redirect_to))
+  } catch (error) {
+    next(error)
   }
-
-  // Seems like the user authenticated! Let's tell hydra...
-
-  hydraAdmin
-    .getOAuth2LoginRequest({ loginChallenge: challenge })
-    .then((loginRequest) =>
-      hydraAdmin
-        .acceptOAuth2LoginRequest({
-          loginChallenge: challenge,
-          acceptOAuth2LoginRequest: {
-            // Subject is an alias for user ID. A subject can be a random string, a UUID, an email address, ....
-            subject: "foo@bar.com",
-
-            // This tells hydra to remember the browser and automatically authenticate the user in future requests. This will
-            // set the "skip" parameter in the other route to true on subsequent requests!
-            remember: Boolean(req.body.remember),
-
-            // When the session expires, in seconds. Set this to 0 so it will never expire.
-            remember_for: 3600,
-
-            // Sets which "level" (e.g. 2-factor authentication) of authentication the user has. The value is really arbitrary
-            // and optional. In the context of OpenID Connect, a value of 0 indicates the lowest authorization level.
-            // acr: '0',
-            //
-            // If the environment variable CONFORMITY_FAKE_CLAIMS is set we are assuming that
-            // the app is built for the automated OpenID Connect Conformity Test Suite. You
-            // can peak inside the code for some ideas, but be aware that all data is fake
-            // and this only exists to fake a login system which works in accordance to OpenID Connect.
-            //
-            // If that variable is not set, the ACR value will be set to the default passed here ('0')
-            acr: oidcConformityMaybeFakeAcr(loginRequest, "0"),
-          },
-        })
-        .then(({ redirect_to }) => {
-          // All we need to do now is to redirect the user back to hydra!
-          res.redirect(String(redirect_to))
-        }),
-    )
-    // This will handle any error that happens when making HTTP calls to hydra
-    .catch(next)
-
-  // You could also deny the login request which tells hydra that no one authenticated!
-  //   hydraAdmin.rejectOAuth2LoginRequest({
-  //     loginChallenge: challenge,
-  //     rejectOAuth2Request: {
-  //       error: "invalid_request",
-  //       error_description: "The user did something stupid...",
-  //     },
-  //   })
-  //   .then(({body}) => {
-  //     // All we need to do now is to redirect the browser back to hydra!
-  //     res.redirect(String(body.redirectTo));
-  //   })
-  //   // This will handle any error that happens when making HTTP calls to hydra
-  //   .catch(next);
 })
 
 export default router
