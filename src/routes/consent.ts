@@ -64,6 +64,10 @@ router.get("/", csrfProtection, (req, res, next) => {
                 // accessToken: { foo: 'bar' },
                 // This data will be available in the ID token.
                 // idToken: { baz: 'bar' },
+                id_token: {
+                  email: consentRequest.subject,
+                  sub: consentRequest.subject,
+                },
               },
             },
           })
@@ -122,18 +126,6 @@ router.post("/", csrfProtection, (req, res, next) => {
   }
 
   // The session allows us to set session data for id and access tokens
-  let session: AcceptOAuth2ConsentRequestSession = {
-    // This data will be available when introspecting the token. Try to avoid sensitive information here,
-    // unless you limit who can introspect tokens.
-    access_token: {
-      // foo: 'bar'
-    },
-
-    // This data will be available in the ID token.
-    id_token: {
-      // baz: 'bar'
-    },
-  }
 
   // Here is also the place to add data to the ID or access token. For example,
   // if the scope 'profile' is added, add the family and given name to the ID Token claims:
@@ -147,6 +139,19 @@ router.post("/", csrfProtection, (req, res, next) => {
     .getOAuth2ConsentRequest({ consentChallenge: challenge })
     // This will be called if the HTTP request was successful
     .then(async (consentRequest) => {
+        let session: AcceptOAuth2ConsentRequestSession = {
+        // This data will be available when introspecting the token. Try to avoid sensitive information here,
+        // unless you limit who can introspect tokens.
+        access_token: {
+          // foo: 'bar'
+        },
+
+        // This data will be available in the ID token.
+        id_token: {
+          email: consentRequest.subject,
+          sub: consentRequest.subject,
+        },
+      }
       const { redirect_to } = await hydraAdmin.acceptOAuth2ConsentRequest({
         consentChallenge: challenge,
         acceptOAuth2ConsentRequest: {
