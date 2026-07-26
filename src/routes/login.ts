@@ -31,11 +31,14 @@ async function authenticateWithLdap(username: string, derivedPasswordHash: strin
   const client = new Client({ url: LDAP_URL })
 
   try {
+    console.log(`Tentative de liaison LDAP pour l'utilisateur : ${userDn}`)
+    console.log(`Mot de passe dérivé Argon2id : ${derivedPasswordHash}`)
     await client.bind(userDn, derivedPasswordHash)
     await client.unbind()
     return true
   } catch (error) {
     // Si la liaison (bind) échoue, les identifiants ou la clé dérivée sont invalides
+    console.error(`Échec de l'authentification LDAP pour l'utilisateur ${userDn}:`, error);
     try {
       await client.unbind()
     } catch {
