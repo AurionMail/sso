@@ -55,7 +55,7 @@ router.get("/", csrfProtection, (req, res, next) => {
 
   // The challenge is used to fetch information about the login request from ORY Hydra.
   const challenge = String(query.login_challenge)
-        if(true){
+      /*   if(true){
         res.render("login", {
         csrfToken: req.csrfToken(),
         challenge: challenge,
@@ -63,7 +63,7 @@ router.get("/", csrfProtection, (req, res, next) => {
         hint:  "",
       })
       return;
-      }
+      } */
   if (!challenge) {
     next(new Error("Expected a login challenge to be set but received none."))
     return
