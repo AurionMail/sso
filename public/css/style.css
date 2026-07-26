@@ -193,15 +193,6 @@
   }
 }
 @layer utilities {
-  .invisible {
-    visibility: hidden;
-  }
-  .visible {
-    visibility: visible;
-  }
-  .fixed {
-    position: fixed;
-  }
   .mt-1 {
     margin-top: var(--spacing);
   }
@@ -448,9 +439,6 @@
   }
   .text-white {
     color: var(--color-white);
-  }
-  .lowercase {
-    text-transform: lowercase;
   }
   .uppercase {
     text-transform: uppercase;
