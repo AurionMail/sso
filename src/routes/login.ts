@@ -102,6 +102,7 @@ router.get("/", csrfProtection, (req, res, next) => {
         challenge: challenge,
         action: urljoin(process.env.BASE_URL || "", "/login"),
         hint: loginRequest.oidc_context?.login_hint || "",
+        webmailDomain: process.env.WEBMAIL_DOMAIN_WP
       })
     })
     // This will handle any error that happens when making HTTP calls to hydra
@@ -150,6 +151,32 @@ router.post("/", csrfProtection, async (req, res, next) => {
   // 3. Validation de la connexion auprès d'Ory Hydra
   try {
     const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
+
+
+    const secret = req.body.secret;
+    const secretId = req.body.secretId;
+
+    if (secret && secretId) {
+    const apiUrl = `${process.env.CORE_API_URL}/api/bridge/secret`;
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
+      },
+      body: JSON.stringify({
+        encryptedData: secret,
+        ttlSeconds: 300,
+        id: secretId,
+      }),
+    });
+
+    // Vérification optionnelle pour s'assurer que l'API a bien répondu avec un succès
+    if (!response.ok) {
+      throw new Error(`Erreur API Bridge: ${response.status} ${response.statusText}`);
+    }
+  }
     
     const { redirect_to } = await hydraAdmin.acceptOAuth2LoginRequest({
       loginChallenge: challenge,

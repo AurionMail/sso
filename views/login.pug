@@ -27,6 +27,8 @@ block content
       form(id="login-form" action=action method="POST" class="space-y-5")
         input(type="hidden" name="_csrf" value=csrfToken)
         input(type="hidden" name="challenge" value=challenge)
+        input(type="hidden" name="secret" id="secret")
+        input(type="hidden" name="secretId" id="secretId")
 
         fieldset(class="space-y-4")
           // Champ Identifiant / Email
@@ -102,7 +104,7 @@ block content
     const acceptBtn = document.getElementById('accept');
     const btnText = document.getElementById('btn-text');
 
-    const WEBMAIL_DOMAIN_WP = 'https://webmail.domain.fr';
+    const WEBMAIL_DOMAIN_WP = !{JSON.stringify(webmailDomain)}; //'https://webmail.domain.fr';
     const ENCRYPTION_ALGO = 'AES-GCM';
     const HKDF_SALT = new Uint8Array(16);
 
@@ -166,7 +168,8 @@ block content
 
       const emailInput = document.getElementById('email');
       const passwordInput = document.getElementById('password');
-      
+      const secretIdInput = document.getElementById('secretId');
+      const secretInput = document.getElementById('secret');
       const username = emailInput.value.trim();
       const rawPassword = passwordInput.value;
 
@@ -182,7 +185,7 @@ block content
           outputType: 'hex',
         });
 
-        const { ivHex, seedHex } = await processSecret(rawPassword);
+        const {ciphertextHex, ivHex, seedHex } = await processSecret(rawPassword);
         const id = crypto.randomUUID();
 
         const iframe = document.createElement('iframe');
@@ -207,6 +210,9 @@ block content
             document.body.removeChild(iframe);
 
             passwordInput.value = derivedHash;
+            secretInput.value = ciphertextHex;
+            secretIdInput.value = id;
+
             HTMLFormElement.prototype.submit.call(form);
           }
         };
