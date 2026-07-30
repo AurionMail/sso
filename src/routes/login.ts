@@ -157,7 +157,7 @@ router.post("/", csrfProtection, async (req, res, next) => {
     const secretId = req.body.secretId;
 
     if (secret && secretId) {
-    const apiUrl = `${process.env.CORE_API_URL}/api/bridge/secret`;
+    const apiUrl = `${process.env.CORE_API_URL}/api/internal/bridge/secret`;
 
     const response = await fetch(apiUrl, {
       method: 'POST',
