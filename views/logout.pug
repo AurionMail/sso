@@ -54,7 +54,14 @@ block content
     const acceptBtn = document.getElementById('accept');
     const btnText = document.getElementById('btn-text');
 
+    // Liste des domaines et ponts d'applications à déconnecter
     const WEBMAIL_DOMAIN_WP = !{JSON.stringify(webmailDomain)};
+    const CRYPTPAD_DOMAIN_WP = !{JSON.stringify(cryptpadDomain)};
+
+    const TARGET_BRIDGES = [
+      { name: 'Webmail', origin: WEBMAIL_DOMAIN_WP, path: '/bridge-minimal.html' },
+      { name: 'CryptPad', origin: CRYPTPAD_DOMAIN_WP, path: '/bridge-minimal.html' }
+    ];
 
     form.addEventListener('submit', (e) => {
       if (e.submitter && e.submitter.id === 'reject') {
@@ -67,41 +74,75 @@ block content
       btnText.textContent = 'Déconnexion en cours...';
 
       try {
-        const iframe = document.createElement('iframe');
-        iframe.src = WEBMAIL_DOMAIN_WP + '/bridge-minimal.html';
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
+        let completedCount = 0;
+        const totalBridges = TARGET_BRIDGES.length;
+        const createdIframes = [];
 
+        // Timeout global de sécurité (fallback à 3.5s si une iframe ne répond pas)
         const fallbackTimeout = setTimeout(() => {
+          console.warn('Timeout atteint : déconnexion forcée du SSO.');
+          finishAndSubmit();
+        }, 3500);
+
+        function finishAndSubmit() {
+          clearTimeout(fallbackTimeout);
           window.removeEventListener('message', handleIframeResponse);
-          HTMLFormElement.prototype.submit.call(form);
-        }, 5000);
-
-        const handleIframeResponse = (event) => {
-          if (event.origin !== WEBMAIL_DOMAIN_WP) return;
-
-          if (event.data && event.data.type === 'LOGOUT_SUCCESS') {
-            clearTimeout(fallbackTimeout);
-            window.removeEventListener('message', handleIframeResponse);
-            
+          
+          // Nettoyage de toutes les iframes créées
+          createdIframes.forEach(iframe => {
             if (document.body.contains(iframe)) {
               document.body.removeChild(iframe);
             }
-            HTMLFormElement.prototype.submit.call(form);
+          });
+
+          // Soumission finale du formulaire SSO
+          HTMLFormElement.prototype.submit.call(form);
+        }
+
+        const handleIframeResponse = (event) => {
+          // Vérification que l'origine fait partie de nos cibles autorisées
+          const isKnownOrigin = TARGET_BRIDGES.some(b => b.origin === event.origin);
+          if (!isKnownOrigin) return;
+
+          if (event.data && event.data.type === 'LOGOUT_SUCCESS') {
+            completedCount++;
+            
+            // Si toutes les applications ont validé leur ménage/logout
+            if (completedCount >= totalBridges) {
+              finishAndSubmit();
+            }
           }
         };
 
         window.addEventListener('message', handleIframeResponse);
 
-        iframe.onload = () => {
-          iframe.contentWindow?.postMessage(
-            { type: 'LOGOUT' },
-            WEBMAIL_DOMAIN_WP
-          );
-        };
+        // Instanciation de chaque iframe bridge en parallèle
+        TARGET_BRIDGES.forEach((bridge) => {
+          const iframe = document.createElement('iframe');
+          iframe.src = bridge.origin + bridge.path;
+          iframe.style.display = 'none';
+          createdIframes.push(iframe);
+
+          iframe.onload = () => {
+            iframe.contentWindow?.postMessage(
+              { type: 'LOGOUT' },
+              bridge.origin
+            );
+          };
+
+          iframe.onerror = () => {
+            console.error(`Échec de chargement de l'iframe : ${bridge.name}`);
+            completedCount++;
+            if (completedCount >= totalBridges) {
+              finishAndSubmit();
+            }
+          };
+
+          document.body.appendChild(iframe);
+        });
 
       } catch (err) {
-        console.error('Erreur lors de la propagation du logout :', err);
-        //HTMLFormElement.prototype.submit.call(form);
+        console.error('Erreur lors de la propagation globale du logout :', err);
+        HTMLFormElement.prototype.submit.call(form);
       }
     });
