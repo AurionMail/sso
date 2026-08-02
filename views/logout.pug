@@ -84,7 +84,6 @@ block content
             clearTimeout(fallbackTimeout);
             window.removeEventListener('message', handleIframeResponse);
             
-            // Nettoyage de l'iframe du DOM et soumission du formulaire
             if (document.body.contains(iframe)) {
               document.body.removeChild(iframe);
             }

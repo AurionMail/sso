@@ -33,6 +33,7 @@ router.get("/", csrfProtection, (req, res, next) => {
         csrfToken: req.csrfToken(),
         challenge: challenge,
         action: urljoin(process.env.BASE_URL || "", "/logout"),
+        webmailDomain: process.env.WEBMAIL_DOMAIN_WP
       })
     })
     // This will handle any error that happens when making HTTP calls to hydra
