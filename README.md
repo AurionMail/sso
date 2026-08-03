@@ -10,6 +10,7 @@ For more details, see docs repo
 - `npm install`
 - `npm run build`
 ## Env
+```
 PORT=3030
 BASE_URL=https://sso.aurionmail.org
 HYDRA_ADMIN_URL=http://localhost:4445
@@ -23,3 +24,4 @@ WEBMAIL_DOMAIN_WP=https://officialweb.mail.aurionmail.org
 CRYPTPAD_DOMAIN_WP=https://pad.aurionmail.org
 CORE_API_URL=https://aurion.mail.aurionmail.org
 CORE_API_INTERNAL_SECRET=ezfeoizrourefgzerrvettyojuipytfdesdzstrye
+```
