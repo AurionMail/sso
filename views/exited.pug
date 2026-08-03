@@ -1,0 +1,27 @@
+extends layout
+
+block content
+  div(class="rounded-2xl border border-border/60 bg-background/80 backdrop-blur-sm shadow-xl shadow-black/5 dark:shadow-black/20 overflow-hidden w-full max-w-md")
+    div(class="px-8 pt-10 pb-6 text-center")
+      div(class="inline-flex items-center justify-center mb-5 w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-sm")
+        svg(xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-circle-2 w-8 h-8" aria-hidden="true")
+          circle(cx="12" cy="12" r="10")
+          path(d="m9 12 2 2 4-4")
+      h1(id="logged-out-title" class="text-2xl font-semibold text-foreground tracking-tight")= t('loggedOut.title')
+      p(class="text-sm text-muted-foreground mt-1.5")= t('loggedOut.subtitle')
+
+    div(class="px-8 pb-8 space-y-6")
+      div(class="p-4 rounded-xl border border-border/60 bg-muted/30 text-center")
+        p(class="text-xs text-muted-foreground leading-relaxed")= t('loggedOut.securityNotice')
+
+      div(class="space-y-3 pt-1")
+        a(
+          href=!{JSON.stringify(webmailDomain)}
+          class="inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background text-primary-foreground px-4 py-2 w-full h-11 font-medium text-[15px] bg-primary hover:bg-primary/90 transition-all duration-200 rounded-xl shadow-md shadow-primary/15 hover:shadow-lg hover:shadow-primary/20 cursor-pointer"
+        )
+          div(class="flex items-center gap-2")
+            svg(xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-in w-4 h-4" aria-hidden="true")
+              path(d="m10 17 5-5-5-5")
+              path(d="M15 12H3")
+              path(d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4")
+            span= t('loggedOut.reconnect')

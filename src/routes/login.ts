@@ -55,15 +55,6 @@ router.get("/", csrfProtection, (req, res, next) => {
 
   // The challenge is used to fetch information about the login request from ORY Hydra.
   const challenge = String(query.login_challenge)
-      /*   if(true){
-        res.render("login", {
-        csrfToken: req.csrfToken(),
-        challenge: challenge,
-        action: urljoin(process.env.BASE_URL || "", "/login"),
-        hint:  "",
-      })
-      return;
-      } */
   if (!challenge) {
     next(new Error("Expected a login challenge to be set but received none."))
     return
@@ -133,12 +124,9 @@ router.post("/", csrfProtection, async (req, res, next) => {
 
   const username = String(req.body.email || "").trim()
   const derivedPassword = String(req.body.password || "")
-
-  // 2. Validation auprès du serveur LDAP
   const isAuthenticated = await authenticateWithLdap(username, derivedPassword)
 
   if (!isAuthenticated) {
-    // Identifiants ou dérivation Argon2id incorrecte
     return res.render("login", {
       csrfToken: req.csrfToken(),
       challenge: challenge,
@@ -172,7 +160,6 @@ router.post("/", csrfProtection, async (req, res, next) => {
       }),
     });
 
-    // Vérification optionnelle pour s'assurer que l'API a bien répondu avec un succès
     if (!response.ok) {
       throw new Error(`Erreur API Bridge: ${response.status} ${response.statusText}`);
     }
@@ -181,19 +168,15 @@ router.post("/", csrfProtection, async (req, res, next) => {
     const { redirect_to } = await hydraAdmin.acceptOAuth2LoginRequest({
       loginChallenge: challenge,
       acceptOAuth2LoginRequest: {
-        // Le `subject` est l'identifiant unique OIDC (username/email transmis à Stalwart/CryptPad)
         subject: username,
 
-        // Mémorisation de la session SSO
         remember: Boolean(req.body.remember),
-        remember_for: 28800, // 8 heures de session SSO (3600*8)
+        remember_for: 28800, // 8 hours
 
-        // Contexte additionnel pour la conformité OIDC
         acr: oidcConformityMaybeFakeAcr(loginRequest, "0"),
       },
     })
 
-    // Redirection vers le serveur Hydra
     res.redirect(String(redirect_to))
   } catch (error) {
     next(error)

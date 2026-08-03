@@ -1,52 +1,25 @@
-# hydra-user-and-consent-provider-node
+# Aurion SSO
+This app is used by Hydra to authenticate users. It ensure 0K connexion and never share the main password.
 
-This is a reference implementation for the User Login and Consent flow of Ory
-OAuth2 service (Hydra) in NodeJS. The application is bootstrapped using the
-`express` cli.
+For more details, see docs repo
 
----
+## Development
+- `npm install`
+- `npm run dev`
+## Build
+- `npm install`
+- `npm run build`
+## Env
+PORT=3030
+BASE_URL=https://sso.aurionmail.org
+HYDRA_ADMIN_URL=http://localhost:4445
+# Only used in paid version of Ory Hydra
+ORY_API_KEY=YOUR_API_KEY
 
-<!-- START doctoc generated TOC please keep comment here to allow auto update -->
-<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
-
-- [Overview](#overview)
-- [Running](#running)
-
-<!-- END doctoc generated TOC please keep comment here to allow auto update -->
-
----
-
-## Overview
-
-Apart from additions (`./routes/login.ts`, `./routes/consent.ts`) and their
-respective templates, only a [CSRF Middleware] has been added. Everything else
-is the standard express template.
-
-Also, a simple helper that makes HTTP requests has been added to
-`./services/hydra.js` which uses the `node-fetch` library.
-
-To set this example up with ORY Hydra, please refer to the
-[official documentation](https://www.ory.sh/docs).
-
-## Running
-
-Please head over to the
-[ORY Hydra 5 Minute Tutorial](https://www.ory.sh/docs/hydra/5min-tutorial) to
-see how this works.
-
-## FAQ
-
-### TLS Termination
-
-You can mock TLS Termination by setting environment variable
-`MOCK_TLS_TERMINATION` to any value, for example `MOCK_TLS_TERMINATION=y`. This
-will add `X-Forwarded-Proto: https` to each HTTP Request Header.
-
-### Integrating with Ory Network
-
-To integrate this example app with Ory Cloud Oauth2 Service set variable
-`ORY_API_KEY` with value of your
-[Ory API Key / Ory Personal Access Token](https://www.ory.sh/docs/concepts/personal-access-token)
-and set `HYDRA_ADMIN_URL` to the value of you Ory Cloud API URL which you can
-find in your
-[Ory Cloud Project](https://www.ory.sh/docs/concepts/terminology#ory-cloud-project)
+# LDAP
+LDAP_URL=ldap://127.0.0.1:3890
+LDAP_USER_DN_PATTERN=uid={username},ou=people,dc=aurionmail,dc=org
+WEBMAIL_DOMAIN_WP=https://officialweb.mail.aurionmail.org
+CRYPTPAD_DOMAIN_WP=https://pad.aurionmail.org
+CORE_API_URL=https://aurion.mail.aurionmail.org
+CORE_API_INTERNAL_SECRET=ezfeoizrourefgzerrvettyojuipytfdesdzstrye

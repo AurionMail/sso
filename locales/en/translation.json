@@ -1,0 +1,24 @@
+{
+  "login": {
+    "title": "SSO Login",
+    "subtitle": "Aurion secure authentication",
+    "usernameOrEmail": "Username or Email",
+    "emailPlaceholder": "name@domain.com",
+    "password": "Password",
+    "rememberMe": "Remember me",
+    "submit": "Log in",
+    "denyAccess": "Deny access"
+  },
+  "logout": {
+    "title": "SSO Logout",
+    "subtitle": "Are you sure you want to log out?",
+    "confirm": "Yes, log out",
+    "cancel": "Cancel / Stay logged in"
+  },
+  "loggedOut": {
+    "title": "Logged out successfully",
+    "subtitle": "You have been safely logged out from Aurion SSO.",
+    "securityNotice": "For security reasons, please close all browser windows if you were on a shared computer.",
+    "reconnect": "Log in again"
+  }
+}

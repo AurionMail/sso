@@ -5,8 +5,8 @@ import express from "express"
 
 const router = express.Router()
 
-router.get("/", (req, res) => {
-  res.redirect(process.env.WEBMAIL_DOMAIN_WP || "/login")
+router.get("/exited", (req, res) => {
+  res.render("exited", {webmailDomain: process.env.WEBMAIL_DOMAIN_WP})
 })
 
 export default router

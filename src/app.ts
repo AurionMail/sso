@@ -6,6 +6,9 @@ import path from "path"
 import logger from "morgan"
 import cookieParser from "cookie-parser"
 import bodyParser from "body-parser"
+import i18next from "i18next"
+import i18nextMiddleware from "i18next-http-middleware"
+import Backend from "i18next-fs-backend"
 
 import routes from "./routes"
 import login from "./routes/login"
@@ -19,6 +22,24 @@ const app = express()
 app.set("views", path.join(__dirname, "..", "views"))
 app.set("view engine", "pug")
 
+// Configuration d'i18next
+i18next
+  .use(Backend)
+  .use(i18nextMiddleware.LanguageDetector)
+  .init({
+    fallbackLng: "en",
+    preload: ["fr", "en"],
+    backend: {
+      loadPath: path.join(__dirname, "..", "locales", "{{lng}}", "translation.json"),
+    },
+    detection: {
+      order: ["querystring", "cookie", "header"],
+      lookupQuerystring: "lng",
+      lookupCookie: "i18next",
+      caches: ["cookie"],
+    },
+  })
+
 // uncomment after placing your favicon in /public
 //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 app.use(logger("dev"))
@@ -26,6 +47,8 @@ app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: false }))
 app.use(cookieParser())
 app.use('/public', express.static(path.join(__dirname,'..', "public")))
+
+app.use(i18nextMiddleware.handle(i18next))
 
 app.use("/", routes)
 app.use("/login", login)

@@ -8,8 +8,8 @@ block content
           path(d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4")
           polyline(points="16 17 21 12 16 7")
           line(x1="21" x2="9" y1="12" y2="12")
-      h1(id="logout-title" class="text-2xl font-semibold text-foreground tracking-tight") Déconnexion SSO
-      p(class="text-sm text-muted-foreground mt-1.5") Souhaitez-vous vraiment vous déconnecter ?
+      h1(id="logout-title" class="text-2xl font-semibold text-foreground tracking-tight")= t('logout.title')
+      p(class="text-sm text-muted-foreground mt-1.5")= t('logout.subtitle')
 
     div(class="px-8 pb-8")
       if error
@@ -38,7 +38,7 @@ block content
               path(d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4")
               polyline(points="16 17 21 12 16 7")
               line(x1="21" x2="9" y1="12" y2="12")
-            span(id="btn-text") Oui, se déconnecter
+            span(id="btn-text")= t('logout.confirm')
 
         button(
           type="submit"
@@ -47,7 +47,7 @@ block content
           value="No"
           formnovalidate
           class="inline-flex items-center justify-center w-full h-10 px-4 text-xs font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted/50 rounded-xl transition-colors duration-200 cursor-pointer"
-        ) Annuler / Rester connecté
+        )= t('logout.cancel')
 
   script.
     const form = document.getElementById('logout-form');

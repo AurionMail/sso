@@ -1,0 +1,24 @@
+{
+  "login": {
+    "title": "Connexion SSO",
+    "subtitle": "Authentification sécurisée Aurion",
+    "usernameOrEmail": "Nom d'utilisateur ou Email",
+    "emailPlaceholder": "nom@domaine.fr",
+    "password": "Mot de passe",
+    "rememberMe": "Se souvenir de moi",
+    "submit": "Se connecter",
+    "denyAccess": "Refuser l'accès"
+  },
+  "logout": {
+    "title": "Déconnexion SSO",
+    "subtitle": "Souhaitez-vous vraiment vous déconnecter ?",
+    "confirm": "Oui, se déconnecter",
+    "cancel": "Annuler / Rester connecté"
+  },
+  "loggedOut": {
+    "title": "Déconnexion réussie",
+    "subtitle": "Vous avez été déconnecté en toute sécurité du SSO Aurion.",
+    "securityNotice": "Pour des raisons de sécurité, veuillez fermer toutes les fenêtres de votre navigateur si vous étiez sur un ordinateur partagé.",
+    "reconnect": "Se reconnecter"
+  }
+}
