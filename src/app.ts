@@ -15,6 +15,7 @@ import login from "./routes/login"
 import logout from "./routes/logout"
 import consent from "./routes/consent"
 import device from "./routes/device"
+import exited from "./routes/exited"
 
 const app = express()
 
@@ -55,6 +56,7 @@ app.use("/login", login)
 app.use("/logout", logout)
 app.use("/consent", consent)
 app.use("/device", device)
+app.use('/exited', exited )
 app.use('/vendor/hash-wasm', express.static(path.join(__dirname, '..', 'node_modules', 'hash-wasm', 'dist')));
 
 // catch 404 and forward to error handler

@@ -5,7 +5,7 @@ import express from "express"
 
 const router = express.Router()
 
-router.get("/exited", (req, res) => {
+router.get("/", (req, res) => {
   res.render("exited", {webmailDomain: process.env.WEBMAIL_DOMAIN_WP})
 })
 
