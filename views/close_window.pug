@@ -1,0 +1,17 @@
+extends layout
+
+block content
+  div(class="rounded-2xl border border-border/60 bg-background/80 backdrop-blur-sm shadow-xl shadow-black/5 dark:shadow-black/20 overflow-hidden w-full max-w-md p-8 text-center space-y-4")
+    h1(class="text-2xl font-semibold text-foreground tracking-tight")= t('closeWindow.title', 'Opération annulée')
+    p(class="text-sm text-muted-foreground")= t('closeWindow.subtitle', 'Vous pouvez maintenant fermer cet onglet en toute sécurité.')
+    
+    div(class="pt-2")
+      button(
+        onclick="window.close()"
+        class="inline-flex items-center justify-center px-4 py-2 w-full h-11 font-medium text-[15px] bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl transition-all shadow-md cursor-pointer"
+      )= t('closeWindow.button', 'Fermer la fenêtre')
+
+    script.
+      window.onload = function() {
+        window.close();
+      };

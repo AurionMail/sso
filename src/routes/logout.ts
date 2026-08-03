@@ -50,10 +50,8 @@ router.post("/", csrfProtection, (req, res, next) => {
       hydraAdmin
         .rejectOAuth2LogoutRequest({ logoutChallenge: challenge })
         .then(() => {
-          // The user did not want to log out. Let's redirect him back somewhere or do something else.
-          res.redirect("https://www.ory.sh/")
+          res.render("close_window")
         })
-        // This will handle any error that happens when making HTTP calls to hydra
         .catch(next)
     )
   }

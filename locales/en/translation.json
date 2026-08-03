@@ -20,5 +20,10 @@
     "subtitle": "You have been safely logged out from Aurion SSO.",
     "securityNotice": "For security reasons, please close all browser windows if you were on a shared computer.",
     "reconnect": "Log in again"
+  },
+  "closeWindow": {
+    "title": "Operation cancelled",
+    "subtitle": "You can now safely close this tab.",
+    "button": "Close window"
   }
 }

@@ -20,5 +20,10 @@
     "subtitle": "Vous avez été déconnecté en toute sécurité du SSO Aurion.",
     "securityNotice": "Pour des raisons de sécurité, veuillez fermer toutes les fenêtres de votre navigateur si vous étiez sur un ordinateur partagé.",
     "reconnect": "Se reconnecter"
+  },
+  "closeWindow": {
+    "title": "Opération annulée",
+    "subtitle": "Vous pouvez maintenant fermer cet onglet en toute sécurité.",
+    "button": "Fermer la fenêtre"
   }
 }
