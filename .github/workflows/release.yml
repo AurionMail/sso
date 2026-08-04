@@ -28,7 +28,7 @@ jobs:
         run: npm run build
 
       - name: Prune dev dependencies
-        run: npm prune --production
+        run: npm prune --omit=dev
 
       - name: Delete rsc directory
         run: rm -rf src
