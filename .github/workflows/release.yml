@@ -3,6 +3,9 @@ name: Release Package Build
 on:
   release:
     types: [published]
+    
+permissions:
+  contents: write
 
 jobs:
   build-and-release:
@@ -15,7 +18,7 @@ jobs:
       - name: Node.js setup
         uses: actions/setup-node@v4
         with:
-          node.js-version: '20'
+          node.js-version: '24'
           cache: 'npm'
 
       - name: Dependencies installation
