@@ -1,0 +1,39 @@
+name: Release Package Build
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node.js setup
+        uses: actions/setup-node@v4
+        with:
+          node.js-version: '20'
+          cache: 'npm'
+
+      - name: Dependencies installation
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Delete rsc directory
+        run: rm -rf src
+
+      - name: Compress files into a zip archive
+        run: |
+          zip -r aurion-sso.zip lib .example.env locales public views node_modules package.json package-lock.json
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: aurion-sso.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
