@@ -132,7 +132,8 @@ router.post("/", csrfProtection, async (req, res, next) => {
       challenge: challenge,
       action: urljoin(process.env.BASE_URL || "", "/login"),
       hint: username,
-      error: "Identifiant ou mot de passe incorrect.",
+      error: "Incorrect username or password.",
+      webmailDomain: process.env.WEBMAIL_DOMAIN_WP
     })
   }
   // Seems like the user authenticated! Let's tell hydra...
