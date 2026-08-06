@@ -50,7 +50,6 @@ async function initializeAccountLdap(
       await client.unbind() 
     } catch {}
 
-    // Erreur d'identifiants
     if (error?.code === 49) {
       return { success: false, message: t("init.errors.invalidCredentials") }
     }
@@ -63,9 +62,17 @@ async function initializeAccountLdap(
 }
 
 router.get("/", csrfProtection, (req: any, res) => {
+  const queryUsername = String(req.query.username || req.query.email || "").trim()
+  const queryTempPassword = String(req.query.tempPassword || "")
+
+  const isPreFilled = Boolean(queryUsername && queryTempPassword)
+
   res.render("init", {
     csrfToken: req.csrfToken(),
     action: urljoin(process.env.BASE_URL || "", "/init"),
+    hint: queryUsername,
+    tempPassword: queryTempPassword,
+    isPreFilled: isPreFilled,
     error: null,
   })
 })
@@ -73,36 +80,44 @@ router.get("/", csrfProtection, (req: any, res) => {
 router.post("/", csrfProtection, async (req: any, res, next) => {
   const t = req.t || ((key: string) => key)
 
-  const username = String(req.body.username || "").trim()
+  const username = String(req.body.username || req.body.email || "").trim()
   const tempPassword = String(req.body.tempPassword || "")
   const newPassword = String(req.body.newPassword || "")
   const confirmPassword = String(req.body.confirmPassword || "")
   const actionUrl = urljoin(process.env.BASE_URL || "", "/init")
+  
+  const isPreFilled = req.body.isPreFilled === "true" || (Boolean(username) && Boolean(tempPassword))
 
   // Validations côté serveur
   if (!username || !tempPassword || !newPassword) {
-    return res.render("init-account", {
+    return res.render("init", {
       csrfToken: req.csrfToken(),
       action: actionUrl,
       hint: username,
+      tempPassword: tempPassword,
+      isPreFilled: isPreFilled,
       error: t("init.errors.requiredFields"),
     })
   }
 
   if (newPassword !== confirmPassword) {
-    return res.render("init-account", {
+    return res.render("init", {
       csrfToken: req.csrfToken(),
       action: actionUrl,
       hint: username,
+      tempPassword: tempPassword,
+      isPreFilled: isPreFilled,
       error: t("init.errors.mismatch"),
     })
   }
 
   if (tempPassword === newPassword) {
-    return res.render("init-account", {
+    return res.render("init", {
       csrfToken: req.csrfToken(),
       action: actionUrl,
       hint: username,
+      tempPassword: tempPassword,
+      isPreFilled: isPreFilled,
       error: t("init.errors.samePassword"),
     })
   }
@@ -111,10 +126,12 @@ router.post("/", csrfProtection, async (req: any, res, next) => {
     const result = await initializeAccountLdap(username, tempPassword, newPassword, t)
 
     if (!result.success) {
-      return res.render("init-account", {
+      return res.render("init", {
         csrfToken: req.csrfToken(),
         action: actionUrl,
         hint: username,
+        tempPassword: tempPassword,
+        isPreFilled: isPreFilled,
         error: result.message || t("init.errors.generic"),
         webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
       })

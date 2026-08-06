@@ -22,6 +22,8 @@ block content
 
       form(id="init-form" action=action method="POST" class="space-y-4")
         input(type="hidden" name="_csrf" value=csrfToken)
+        if isPreFilled
+          input(type="hidden" name="isPreFilled" value="true")
         if challenge
           input(type="hidden" name="challenge" value=challenge)
 
@@ -29,27 +31,43 @@ block content
           div(class="space-y-1.5")
             label(for="username" class="block text-sm font-medium text-foreground")= t('init.username')
             div(class="relative")
-              input(
-                type="text"
-                id="username"
-                name="username"
-                value=hint
-                required
-                autocomplete="username"
-                class="flex w-full border py-2 text-sm text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50 h-11 px-3.5 bg-muted/40 border-border/60 rounded-xl focus:bg-background focus:border-primary/50 transition-all duration-200"
-              )
+              if isPreFilled
+                input(
+                  type="text"
+                  id="username"
+                  value=hint
+                  readonly
+                  tabindex="-1"
+                  class="flex w-full border py-2 text-sm text-foreground opacity-70 cursor-not-allowed select-none h-11 px-3.5 bg-muted/60 border-border/60 rounded-xl focus:outline-none"
+                )
+                input(type="hidden" name="username" value=hint)
+              else
+                input(
+                  type="text"
+                  id="username"
+                  name="username"
+                  value=hint
+                  required
+                  autocomplete="username"
+                  placeholder=t('init.emailPlaceholder')
+                  class="flex w-full border py-2 text-sm text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50 h-11 px-3.5 bg-muted/40 border-border/60 rounded-xl focus:bg-background focus:border-primary/50 transition-all duration-200"
+                )
 
-          div(class="space-y-1.5")
-            label(for="tempPassword" class="block text-sm font-medium text-foreground")= t('init.tempPassword')
-            div(class="relative")
-              input(
-                type="password"
-                id="tempPassword"
-                name="tempPassword"
-                required
-                autocomplete="current-password"
-                class="flex w-full border py-2 text-sm text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50 h-11 px-3.5 bg-muted/40 border-border/60 rounded-xl focus:bg-background focus:border-primary/50 transition-all duration-200"
-              )
+          if isPreFilled
+            input(type="hidden" id="tempPassword" name="tempPassword" value=tempPassword)
+          else
+            div(class="space-y-1.5")
+              label(for="tempPassword" class="block text-sm font-medium text-foreground")= t('init.tempPassword')
+              div(class="relative")
+                input(
+                  type="password"
+                  id="tempPassword"
+                  name="tempPassword"
+                  value=tempPassword
+                  required
+                  autocomplete="current-password"
+                  class="flex w-full border py-2 text-sm text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50 h-11 px-3.5 bg-muted/40 border-border/60 rounded-xl focus:bg-background focus:border-primary/50 transition-all duration-200"
+                )
 
           div(class="space-y-1.5")
             label(for="newPassword" class="block text-sm font-medium text-foreground")= t('init.newPassword')
@@ -126,12 +144,12 @@ block content
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const emailInput = document.getElementById('username');
+      const usernameInput = document.getElementById('username');
       const tempPasswordInput = document.getElementById('tempPassword');
       const newPasswordInput = document.getElementById('newPassword');
       const confirmPasswordInput = document.getElementById('confirmPassword');
 
-      const username = emailInput.value.trim();
+      const username = usernameInput.value.trim();
       const rawTempPassword = tempPasswordInput.value;
       const rawNewPassword = newPasswordInput.value;
       const rawConfirmPassword = confirmPasswordInput.value;
@@ -152,9 +170,7 @@ block content
       try {
         const salt = new TextEncoder().encode(`auth_salt_${username}`);
 
-        const [derivedNewHash] = await Promise.all([
-          deriveArgon2(rawNewPassword, salt)
-        ]);
+        const derivedNewHash = await deriveArgon2(rawNewPassword, salt);
 
         newPasswordInput.value = derivedNewHash;
         confirmPasswordInput.value = derivedNewHash;
