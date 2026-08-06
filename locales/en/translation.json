@@ -2,12 +2,13 @@
   "login": {
     "title": "SSO Login",
     "subtitle": "Aurion secure authentication",
-    "usernameOrEmail": "Username or Email",
+    "username": "Username",
     "emailPlaceholder": "name@domain.com",
     "password": "Password",
     "rememberMe": "Remember me",
     "submit": "Log in",
-    "denyAccess": "Deny access"
+    "denyAccess": "Deny access",
+    "progress" :"Derivating your password..."
   },
   "logout": {
     "title": "SSO Logout",
@@ -25,5 +26,21 @@
     "title": "Operation cancelled",
     "subtitle": "You can now safely close this tab.",
     "button": "Close window"
+  },
+  "init": {
+    "title": "Account Initialization",
+    "subtitle": "Set your new password",
+    "username": "Username",
+    "emailPlaceholder": "your.name@domain.com",
+    "tempPassword": "Temporary password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "submit": "Initialize Account",
+    "progress": "Computing security key...",
+    "errors": {
+      "mismatch": "The two new passwords do not match.",
+      "samePassword": "The new password must be different from the temporary password.",
+      "crypto": "Cryptographic derivation error."
+    }
   }
 }

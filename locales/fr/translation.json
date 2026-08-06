@@ -2,12 +2,13 @@
   "login": {
     "title": "Connexion SSO",
     "subtitle": "Authentification sécurisée Aurion",
-    "usernameOrEmail": "Nom d'utilisateur ou Email",
+    "username": "Nom d'utilisateur",
     "emailPlaceholder": "nom@domaine.fr",
     "password": "Mot de passe",
     "rememberMe": "Se souvenir de moi",
     "submit": "Se connecter",
-    "denyAccess": "Refuser l'accès"
+    "denyAccess": "Refuser l'accès",
+    "progress": "Traitement de vos identifiants"
   },
   "logout": {
     "title": "Déconnexion SSO",
@@ -25,5 +26,21 @@
     "title": "Opération annulée",
     "subtitle": "Vous pouvez maintenant fermer cet onglet en toute sécurité.",
     "button": "Fermer la fenêtre"
+  },
+  "init": {
+    "title": "Initialisation du compte",
+    "subtitle": "Définissez votre nouveau mot de passe",
+    "username": "Identifiant",
+    "emailPlaceholder": "votre.nom@domaine.fr",
+    "tempPassword": "Mot de passe temporaire",
+    "newPassword": "Nouveau mot de passe",
+    "confirmPassword": "Confirmer le nouveau mot de passe",
+    "submit": "Valider l'initialisation",
+    "progress": "Calcul de la clé de sécurité...",
+    "errors": {
+      "mismatch": "Les deux nouveaux mots de passe ne correspondent pas.",
+      "samePassword": "Le nouveau mot de passe doit être différent du mot de passe temporaire.",
+      "crypto": "Erreur de dérivation cryptographique."
+    }
   }
 }

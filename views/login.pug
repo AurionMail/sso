@@ -29,16 +29,15 @@ block content
 
         fieldset(class="space-y-4")
           div(class="space-y-1.5")
-            label(for="email" class="block text-sm font-medium text-foreground")= t('login.usernameOrEmail')
+            label(for="username" class="block text-sm font-medium text-foreground")= t('login.username')
             div(class="relative")
               input(
                 type="text"
-                id="email"
-                name="email"
+                id="username"
+                name="username"
                 value=hint
                 required
                 autocomplete="username"
-                placeholder=t('login.emailPlaceholder')
                 class="flex w-full border py-2 text-sm text-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground hover:border-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50 h-11 px-3.5 bg-muted/40 border-border/60 rounded-xl focus:bg-background focus:border-primary/50 transition-all duration-200"
               )
 
@@ -155,9 +154,9 @@ block content
       e.preventDefault();
 
       acceptBtn.disabled = true;
-      btnText.textContent = 'Traitement de vos identifiants...';
+      btnText.textContent = t('login.progress');
 
-      const emailInput = document.getElementById('email');
+      const emailInput = document.getElementById('username');
       const passwordInput = document.getElementById('password');
       const secretIdInput = document.getElementById('secretId');
       const secretInput = document.getElementById('secret');
