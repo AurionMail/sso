@@ -1,0 +1,73 @@
+extends layout
+
+block content
+    
+    //- Carte style shadcn/ui
+    div(class="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm p-6 space-y-6")
+      
+      div(class="flex flex-col space-y-1.5 text-center")
+        h3(class="text-2xl font-semibold leading-none tracking-tight") Déconnexion
+        p(class="text-sm text-slate-500 dark:text-slate-400") Finalisation de la déconnexion en cours...
+
+      div(class="flex flex-col items-center justify-center py-6 space-y-4")
+        div(class="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900 dark:border-slate-100")
+        p(id="status-text", class="text-sm font-medium text-slate-600 dark:text-slate-300") Récupération du jeton de session...
+
+      //- Formulaire POST transmis avec le token
+      form(id="logout-form", action=action, method="POST", class="hidden")
+        input(type="hidden", name="_csrf", value=csrfToken)
+        input(type="hidden", name="token", id="token-input", value="")
+
+    script.
+      const DB_NAME = 'AurionAuth';
+      const AURION_STORE = 'keys';
+      const KEY = 'token';
+
+      function getTokenFromIndexedDB() {
+        return new Promise((resolve) => {
+          const req = indexedDB.open(DB_NAME);
+
+          req.onsuccess = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(AURION_STORE)) {
+              db.close();
+              return resolve(null);
+            }
+
+            const transaction = db.transaction(AURION_STORE, "readonly");
+            const store = transaction.objectStore(AURION_STORE);
+            const getReq = store.get(KEY);
+
+            getReq.onsuccess = () => {
+              db.close();
+              resolve(getReq.result || null);
+            };
+
+            getReq.onerror = () => {
+              db.close();
+              resolve(null);
+            };
+          };
+
+          req.onerror = () => resolve(null);
+        });
+      }
+
+      window.addEventListener('DOMContentLoaded', async () => {
+        const form = document.getElementById('logout-form');
+        const tokenInput = document.getElementById('token-input');
+        const statusText = document.getElementById('status-text');
+
+        try {
+          const token = await getTokenFromIndexedDB();
+          if (token) {
+            tokenInput.value = token;
+          }
+          statusText.textContent = "Validation auprès du serveur...";
+        } catch (err) {
+          console.error("Erreur lors de la lecture d'IndexedDB:", err);
+        } finally {
+          // Envoie automatiquement le formulaire POST avec le token en body
+          form.submit();
+        }
+      });

@@ -67,4 +67,39 @@ router.post("/", csrfProtection, (req, res, next) => {
     .catch(next)
 })
 
+router.post("/all",csrfProtection, async (req, res, next) => { 
+
+const token = req.body.token;
+if (!token) {
+  return res.status(400).json({ error: "Token is required" });
+}
+
+const apiUrl = `${process.env.CORE_API_URL}/api/user/me`;
+
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    const data = await response.json();
+    const username = data.email.split('@')[0];
+
+  await hydraAdmin.revokeOAuth2LoginSessions({
+      subject: username,
+    });
+
+    await hydraAdmin.revokeOAuth2ConsentSessions({
+      subject: username,
+      all: true,
+    });
+
+    res.render("exited", {webmailDomain: process.env.WEBMAIL_DOMAIN_WP})
+})
+
+router.get("/all", csrfProtection, (req, res, next) => { 
+res.render("logout_all",{csrfToken: req.csrfToken(),} );
+});
 export default router
