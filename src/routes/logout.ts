@@ -74,8 +74,8 @@ if (!token) {
   return res.status(400).json({ error: "Token is required" });
 }
 
-const apiUrl = `${process.env.CORE_API_URL}/api/user/me`;
-
+const apiUrl = `${process.env.CORE_API_URL}/api/auth/me`;
+  try {
     const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
@@ -83,6 +83,10 @@ const apiUrl = `${process.env.CORE_API_URL}/api/user/me`;
         'Authorization': `Bearer ${token}`,
       },
     });
+
+  if (!response.ok) {
+      return res.status(401).render("error", { message: "Bad token." });
+  }
 
     const data = await response.json();
     const username = data.email.split('@')[0];
@@ -96,7 +100,10 @@ const apiUrl = `${process.env.CORE_API_URL}/api/user/me`;
       all: true,
     });
 
-    res.render("exited", {webmailDomain: process.env.WEBMAIL_DOMAIN_WP})
+    return res.render("exited", {webmailDomain: process.env.WEBMAIL_DOMAIN_WP})
+  } catch (error) {
+    next(error)
+  }
 })
 
 router.get("/all", csrfProtection, (req, res, next) => { 
