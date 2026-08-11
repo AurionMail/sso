@@ -91,6 +91,15 @@ const apiUrl = `${process.env.CORE_API_URL}/api/auth/me`;
     const data = await response.json();
     const username = data.email.split('@')[0];
 
+      //invalidate all aurion API tokens of this account :
+  const invalidateResponse = await fetch(`${process.env.CORE_API_URL}/api/auth/logout`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
   await hydraAdmin.revokeOAuth2LoginSessions({
       subject: username,
     });
@@ -99,6 +108,10 @@ const apiUrl = `${process.env.CORE_API_URL}/api/auth/me`;
       subject: username,
       all: true,
     });
+
+  if (!invalidateResponse.ok) {
+    return res.status(500).render("error", { message: "Failed to invalidate API tokens." });
+  }
 
     return res.render("exited", {webmailDomain: process.env.WEBMAIL_DOMAIN_WP})
   } catch (error) {
