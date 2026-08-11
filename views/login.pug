@@ -154,7 +154,7 @@ block content
       e.preventDefault();
 
       acceptBtn.disabled = true;
-      btnText.textContent = t('login.progress');
+      btnText.textContent = "#{t('login.progress')}";
 
       const emailInput = document.getElementById('username');
       const passwordInput = document.getElementById('password');
@@ -211,7 +211,7 @@ block content
 
       } catch (err) {
         console.error('Error when crypto :', err);
-        btnText.textContent = t('login.submit');
+        btnText.textContent = "#{t('login.submit')}";
         acceptBtn.disabled = false;
       }
     });

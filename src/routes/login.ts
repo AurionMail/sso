@@ -122,7 +122,7 @@ router.post("/", csrfProtection, async (req, res, next) => {
       .catch(next)
   }
 
-  const username = String(req.body.email || "").trim()
+  const username = String(req.body.username || "").trim()
   const derivedPassword = String(req.body.password || "")
   const isAuthenticated = await authenticateWithLdap(username, derivedPassword)
 
