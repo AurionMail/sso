@@ -63,13 +63,7 @@ block content
       { name: 'CryptPad', origin: CRYPTPAD_DOMAIN_WP, path: '/bridge-minimal.html' }
     ];
 
-    form.addEventListener('submit', (e) => {
-      if (e.submitter && e.submitter.id === 'reject') {
-        return;
-      }
-
-      e.preventDefault();
-
+    function startLogoutProcess() {
       acceptBtn.disabled = true;
       btnText.textContent = 'Déconnexion en cours...';
 
@@ -145,4 +139,18 @@ block content
         console.error('Erreur lors de la propagation globale du logout :', err);
         HTMLFormElement.prototype.submit.call(form);
       }
+    }
+
+    form.addEventListener('submit', (e) => {
+      if (e.submitter && e.submitter.id === 'reject') {
+        return;
+      }
+
+      e.preventDefault();
+      startLogoutProcess();
     });
+
+    if (localStorage.getItem('force_logout') == 'true') {
+      localStorage.removeItem('force_logout');
+      startLogoutProcess();
+    }
