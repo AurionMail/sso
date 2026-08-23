@@ -25,7 +25,7 @@ async function initializeAccountLdap(
   newPassword: string,
   t: (key: string) => string
 ): Promise<{ success: boolean; message?: string }> {
-  const userDn = LDAP_USER_DN_PATTERN.replace("{username}", username)
+  const userDn = LDAP_USER_DN_PATTERN.replace("{username}", username.toLowerCase())
   const client = new Client({ url: LDAP_URL })
 
   try {
@@ -62,7 +62,7 @@ async function initializeAccountLdap(
 }
 
 router.get("/", csrfProtection, (req: any, res) => {
-  const queryUsername = String(req.query.username || req.query.email || "").trim()
+  const queryUsername = String(req.query.username || req.query.email || "").trim().toLowerCase()
   const queryTempPassword = String(req.query.tempPassword || "")
 
   const isPreFilled = Boolean(queryUsername && queryTempPassword)
