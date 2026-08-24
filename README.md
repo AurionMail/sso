@@ -25,3 +25,6 @@ CRYPTPAD_DOMAIN_WP=https://pad.aurionmail.org
 CORE_API_URL=https://aurion.mail.aurionmail.org
 CORE_API_INTERNAL_SECRET=ezfeoizrourefgzerrvettyojuipytfdesdzstrye
 ```
+## Note for admins
+- Once account is created with your usual workflow, users need to go to `sso.domain/init` to activate their account.
+- you can give to your users link like this `https://sso.domain/init?username=john.doe&tempPassword=TempSecret123` to fill username and password fields. 
