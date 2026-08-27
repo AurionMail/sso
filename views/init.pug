@@ -27,6 +27,9 @@ block content
         if challenge
           input(type="hidden" name="challenge" value=challenge)
 
+        input(type="hidden" name="srpSalt" id="srpSalt")
+        input(type="hidden" name="srpVerifier" id="srpVerifier")
+
         fieldset(class="space-y-4")
           div(class="space-y-1.5")
             label(for="username" class="block text-sm font-medium text-foreground")= t('init.username')
@@ -106,8 +109,21 @@ block content
                 path(d="M22 11.08V12a10 10 0 1 1-5.93-9.14")
                 polyline(points="22 4 12 14.01 9 11.01")
               span(id="btn-text")= t('init.submit')
+  script(src="/vendor/crypto-js/crypto-js.js")
+  script(type="module").
+    const rfc5054 = {
+      N_base10: "21766174458617435773191008891802753781907668374255538511144643224689886235383840957210909013086056401571399717235807266581649606472148410291413364152197364477180887395655483738115072677402235101762521901569820740293149529620419333266262073471054548368736039519702486226506248861060256971802984953561121442680157668000761429988222457090413873973970171927093992114751765168063614761119615476233422096442783117971236371647333871414335895773474667308967050807005509320424799678417036867928316761272274230314067548291133582479583061439577559347101961771406173684378522703483495337037655006751328447510550299250924469288819",
+      g_base10: "2",
+      k_base16: "5b9e8ef059c6b32ea59fc1d322d37f04aa30bae5aa9003b8321e21ddb04e300"
+    };
 
-  script.
+    const clientModule = await import("/vendor/thinbus-srp/client.mjs");
+    const SRP6JavascriptClientSession = clientModule.default(
+      rfc5054.N_base10,
+      rfc5054.g_base10,
+      rfc5054.k_base16
+    );
+
     const i18n = {
       submit: "!{t('init.submit')}",
       progress: "!{t('init.progress')}",
@@ -129,16 +145,10 @@ block content
       btnText.textContent = i18n.submit;
     }
 
-    async function deriveArgon2(rawPassword, saltBytes) {
-      return await hashwasm.argon2id({
-        password: rawPassword,
-        salt: saltBytes,
-        parallelism: 1,
-        iterations: 3,
-        memorySize: 65536,
-        hashLength: 32,
-        outputType: 'hex',
-      });
+    function bufferToHex(buffer) {
+      return Array.from(new Uint8Array(buffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
     }
 
     form.addEventListener('submit', async (e) => {
@@ -148,11 +158,16 @@ block content
       const tempPasswordInput = document.getElementById('tempPassword');
       const newPasswordInput = document.getElementById('newPassword');
       const confirmPasswordInput = document.getElementById('confirmPassword');
+      const srpSaltInput = document.getElementById('srpSalt');
+      const srpVerifierInput = document.getElementById('srpVerifier');
 
-      const username = usernameInput.value.trim();
+      const username = usernameInput.value.trim().toLowerCase();
       const rawTempPassword = tempPasswordInput.value;
       const rawNewPassword = newPasswordInput.value;
       const rawConfirmPassword = confirmPasswordInput.value;
+      if (!username || !rawTempPassword || !rawNewPassword) {
+        return;
+      }
 
       if (rawNewPassword !== rawConfirmPassword) {
         showError(i18n.mismatch);
@@ -168,17 +183,22 @@ block content
       btnText.textContent = i18n.progress;
 
       try {
-        const salt = new TextEncoder().encode(`auth_salt_${username}`);
+        const srpClient = new SRP6JavascriptClientSession();
+        const saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+        const saltHex = bufferToHex(saltBytes);
 
-        const derivedNewHash = await deriveArgon2(rawNewPassword, salt);
+        const verifierHex = srpClient.generateVerifier(saltHex, username, rawNewPassword);
 
-        newPasswordInput.value = derivedNewHash;
-        confirmPasswordInput.value = derivedNewHash;
+        srpSaltInput.value = saltHex;
+        srpVerifierInput.value = verifierHex;
+
+        newPasswordInput.value = '';
+        confirmPasswordInput.value = '';
 
         form.submit();
 
       } catch (err) {
-        console.error('Erreur lors du calcul de la clé crypto :', err);
+        console.error('Error when calculating SRP :', err);
         showError(i18n.crypto);
       }
     });

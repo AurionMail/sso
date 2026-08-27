@@ -6,7 +6,6 @@ import url from "url"
 import urljoin from "url-join"
 import csrf from "csurf"
 
-import { Client } from "ldapts"
 import { hydraAdmin } from "../config"
 import { oidcConformityMaybeFakeAcr } from "./stub/oidc-cert"
 
@@ -18,37 +17,39 @@ const csrfProtection = csrf({
 })
 const router = express.Router()
 
-// Configuration LDAP via variables d'environnement (avec valeurs par défaut)
-const LDAP_URL = process.env.LDAP_URL || "ldap://localhost:389"
-const LDAP_USER_DN_PATTERN = process.env.LDAP_USER_DN_PATTERN || "uid={username},ou=users,dc=domaine,dc=fr"
-
 /**
- * Helper d'authentification LDAP (Bind)
- * Vérifie le nom d'utilisateur et le hash Argon2id transmis par le client
+ * Appelle l'API interne Go pour vérifier la preuve SRP (Étape 2)
  */
-async function authenticateWithLdap(username: string, derivedPasswordHash: string): Promise<boolean> {
-  const userDn = LDAP_USER_DN_PATTERN.replace("{username}", username)
-  const client = new Client({ url: LDAP_URL })
+async function verifySrpWithCoreApi(sessionId: string, a: string, m1: string): Promise<boolean> {
+  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/srp/verify`
 
   try {
-    console.log(`Tentative de liaison LDAP pour l'utilisateur : ${userDn}`)
-    console.log(`Mot de passe dérivé Argon2id : ${derivedPasswordHash}`)
-    await client.bind(userDn, derivedPasswordHash)
-    await client.unbind()
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
+      },
+      body: JSON.stringify({
+        sessionId: sessionId,
+        a: a,
+        m1: m1,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error(`SRP Verification failed on Core API: ${response.status} ${response.statusText}`)
+      return false
+    }
+
+    // response.json() with { token, m2 } returned by  Core API
     return true
   } catch (error) {
-    // Si la liaison (bind) échoue, les identifiants ou la clé dérivée sont invalides
-    console.error(`Échec de l'authentification LDAP pour l'utilisateur ${userDn}:`, error);
-    try {
-      await client.unbind()
-    } catch {
-      // Ignorer l'erreur de fermeture si déjà déconnecté
-    }
+    console.error("Erreur de communication avec l'API Core lors du SRP verify:", error)
     return false
   }
 }
 
-// Route GET : Affiche la vue ou traite le "skip" si l'utilisateur est déjà connecté
 router.get("/", csrfProtection, (req, res, next) => {
   // Parses the URL query
   const query = url.parse(req.url, true).query
@@ -65,24 +66,16 @@ router.get("/", csrfProtection, (req, res, next) => {
       loginChallenge: challenge,
     })
     .then((loginRequest) => {
-      // If hydra was already able to authenticate the user, skip will be true and we do not need to re-authenticate
-      // the user.
+      // If hydra was already able to authenticate the user, skip will be true and we do not need to re-authenticate the user.
       if (loginRequest.skip) {
-        // You can apply logic here, for example update the number of times the user logged in.
-        // ...
-
-        // Now it's time to grant the login request. You could also deny the request if something went terribly wrong
-        // (e.g. your arch-enemy logging in...)
         return hydraAdmin
           .acceptOAuth2LoginRequest({
             loginChallenge: challenge,
             acceptOAuth2LoginRequest: {
-              // All we need to do is to confirm that we indeed want to log in the user.
               subject: String(loginRequest.subject),
             },
           })
           .then(({ redirect_to }) => {
-            // All we need to do now is to redirect the user back to hydra!
             res.redirect(String(redirect_to))
           })
       }
@@ -93,20 +86,19 @@ router.get("/", csrfProtection, (req, res, next) => {
         challenge: challenge,
         action: urljoin(process.env.BASE_URL || "", "/login"),
         hint: loginRequest.oidc_context?.login_hint || "",
-        webmailDomain: process.env.WEBMAIL_DOMAIN_WP
+        webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
+        coreApiDomain: process.env.CORE_API_URL,
       })
     })
-    // This will handle any error that happens when making HTTP calls to hydra
     .catch(next)
 })
 
-  // The challenge is now a hidden input field, so let's take it from the request body instead
+// Route POST : Traite la soumission du formulaire et effectue le SRP Step 2
 router.post("/", csrfProtection, async (req, res, next) => {
   const challenge = req.body.challenge
 
-  // Let's see if the user decided to accept or reject the consent request..
-  if (req.body.submit === "Deny access") {
     // Looks like the consent request was denied by the user
+  if (req.body.submit === "Deny access" || req.body.btn_submit === "Deny access") {
     return hydraAdmin
       .rejectOAuth2LoginRequest({
         loginChallenge: challenge,
@@ -116,15 +108,28 @@ router.post("/", csrfProtection, async (req, res, next) => {
         },
       })
       .then(({ redirect_to }) => {
-          // All we need to do now is to redirect the browser back to hydra!
         res.redirect(String(redirect_to))
       })
       .catch(next)
   }
 
   const username = String(req.body.username || "").trim()
-  const derivedPassword = String(req.body.password || "")
-  const isAuthenticated = await authenticateWithLdap(username, derivedPassword)
+  const srpSessionId = String(req.body.srpSessionId || "")
+  const srpA = String(req.body.srpA || "")
+  const srpM1 = String(req.body.srpM1 || "")
+
+  if (!srpSessionId || !srpA || !srpM1) {
+    return res.render("login", {
+      csrfToken: req.csrfToken(),
+      challenge: challenge,
+      action: urljoin(process.env.BASE_URL || "", "/login"),
+      hint: username,
+      error: "Invalid authentication payload.",
+      webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
+      coreApiDomain: process.env.CORE_API_URL,
+    })
+  }
+  const isAuthenticated = await verifySrpWithCoreApi(srpSessionId, srpA, srpM1)
 
   if (!isAuthenticated) {
     return res.render("login", {
@@ -133,11 +138,11 @@ router.post("/", csrfProtection, async (req, res, next) => {
       action: urljoin(process.env.BASE_URL || "", "/login"),
       hint: username,
       error: "Incorrect username or password.",
-      webmailDomain: process.env.WEBMAIL_DOMAIN_WP
+      webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
+      coreApiDomain: process.env.CORE_API_URL,
     })
   }
   // Seems like the user authenticated! Let's tell hydra...
-  // 3. Validation de la connexion auprès d'Ory Hydra
   try {
     const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
 
@@ -148,24 +153,23 @@ router.post("/", csrfProtection, async (req, res, next) => {
     if (secret && secretId) {
     const apiUrl = `${process.env.CORE_API_URL}/api/internal/bridge/secret`;
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
-      },
-      body: JSON.stringify({
-        encryptedData: secret,
-        ttlSeconds: 300,
-        id: secretId,
-      }),
-    });
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
+        },
+        body: JSON.stringify({
+          encryptedData: secret,
+          ttlSeconds: 300,
+          id: secretId,
+        }),
+      })
 
-    if (!response.ok) {
-      throw new Error(`Erreur API Bridge: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(`Erreur API Bridge: ${response.status} ${response.statusText}`)
+      }
     }
-  }
-    
     const { redirect_to } = await hydraAdmin.acceptOAuth2LoginRequest({
       loginChallenge: challenge,
       acceptOAuth2LoginRequest: {

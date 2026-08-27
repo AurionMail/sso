@@ -27,6 +27,10 @@ block content
         input(type="hidden" name="secret" id="secret")
         input(type="hidden" name="secretId" id="secretId")
 
+        input(type="hidden" name="srpSessionId" id="srpSessionId")
+        input(type="hidden" name="srpA" id="srpA")
+        input(type="hidden" name="srpM1" id="srpM1")
+
         fieldset(class="space-y-4")
           div(class="space-y-1.5")
             label(for="username" class="block text-sm font-medium text-foreground")= t('login.username')
@@ -89,12 +93,27 @@ block content
             class="inline-flex items-center justify-center w-full h-10 px-4 text-xs font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted/50 rounded-xl transition-colors duration-200 cursor-pointer"
           )= t('login.denyAccess')
 
-  script.
+  script(src="/vendor/crypto-js/crypto-js.js")
+  script(type="module").
+    const rfc5054 = {
+      N_base10: "21766174458617435773191008891802753781907668374255538511144643224689886235383840957210909013086056401571399717235807266581649606472148410291413364152197364477180887395655483738115072677402235101762521901569820740293149529620419333266262073471054548368736039519702486226506248861060256971802984953561121442680157668000761429988222457090413873973970171927093992114751765168063614761119615476233422096442783117971236371647333871414335895773474667308967050807005509320424799678417036867928316761272274230314067548291133582479583061439577559347101961771406173684378522703483495337037655006751328447510550299250924469288819",
+      g_base10: "2",
+      k_base16: "5b9e8ef059c6b32ea59fc1d322d37f04aa30bae5aa9003b8321e21ddb04e300"
+    };
+
+    const clientModule = await import("/vendor/thinbus-srp/client.mjs");
+    const SRP6JavascriptClientSession = clientModule.default(
+      rfc5054.N_base10,
+      rfc5054.g_base10,
+      rfc5054.k_base16
+    );
+
     const form = document.getElementById('login-form');
     const acceptBtn = document.getElementById('accept');
     const btnText = document.getElementById('btn-text');
 
     const WEBMAIL_DOMAIN_WP = !{JSON.stringify(webmailDomain)};
+    const CORE_API_DOMAIN = !{JSON.stringify(coreApiDomain)};
     const ENCRYPTION_ALGO = 'AES-GCM';
     const HKDF_SALT = new Uint8Array(16);
 
@@ -160,22 +179,32 @@ block content
       const passwordInput = document.getElementById('password');
       const secretIdInput = document.getElementById('secretId');
       const secretInput = document.getElementById('secret');
+      const srpSessionIdInput = document.getElementById('srpSessionId');
+      const srpAInput = document.getElementById('srpA');
+      const srpM1Input = document.getElementById('srpM1');
+
       const username = emailInput.value.trim();
       const rawPassword = passwordInput.value;
 
       try {
-        const salt = new TextEncoder().encode(`auth_salt_${username}`);
-        const derivedHash = await hashwasm.argon2id({
-          password: rawPassword,
-          salt: salt,
-          parallelism: 1,
-          iterations: 3,
-          memorySize: 65536,
-          hashLength: 32,
-          outputType: 'hex',
+        const srpClient = new SRP6JavascriptClientSession();
+        srpClient.step1(username, rawPassword);
+
+        const response = await fetch(`${CORE_API_DOMAIN}/api/auth/srp/challenge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
         });
 
-        const {ciphertextHex, ivHex, seedHex } = await processSecret(rawPassword);
+        if (!response.ok) {
+          throw new Error('Error when SRP : SRP 01');
+        }
+
+        const { sessionId, salt, B } = await response.json();
+
+        const credentials = srpClient.step2(salt, B);
+
+        const { ciphertextHex, ivHex, seedHex } = await processSecret(rawPassword);
         const id = crypto.randomUUID();
 
         const iframe = document.createElement('iframe');
@@ -199,9 +228,12 @@ block content
             window.removeEventListener('message', handleBridgeConfirmation);
             document.body.removeChild(iframe);
 
-            passwordInput.value = derivedHash;
+            passwordInput.value = '';
             secretInput.value = ciphertextHex;
             secretIdInput.value = id;
+            srpSessionIdInput.value = sessionId;
+            srpAInput.value = credentials.A;
+            srpM1Input.value = credentials.M1;
 
             HTMLFormElement.prototype.submit.call(form);
           }
@@ -210,7 +242,7 @@ block content
         window.addEventListener('message', handleBridgeConfirmation);
 
       } catch (err) {
-        console.error('Error when crypto :', err);
+        console.error('Erreur durant la séquence SRP / Bridge :', err);
         btnText.textContent = "#{t('login.submit')}";
         acceptBtn.disabled = false;
       }

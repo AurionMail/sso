@@ -4,7 +4,7 @@
 import express from "express"
 import urljoin from "url-join"
 import csrf from "csurf"
-import { Client, Change, Attribute } from "ldapts"
+import { Client } from "ldapts"
 
 const csrfProtection = csrf({
   cookie: {
@@ -17,46 +17,64 @@ const LDAP_URL = process.env.LDAP_URL || "ldap://localhost:3890"
 const LDAP_USER_DN_PATTERN = process.env.LDAP_USER_DN_PATTERN || "uid={username},ou=users,dc=domaine,dc=fr"
 
 /**
- * Met à jour le mot de passe dans LLDAP
+ * Check temporary password against LDAP by attempting to bind with the provided username and temporary password.
  */
-async function initializeAccountLdap(
-  username: string,
-  tempPassword: string,
-  newPassword: string,
-  t: (key: string) => string
-): Promise<{ success: boolean; message?: string }> {
+async function verifyTempPasswordLdap(username: string, tempPassword: string): Promise<boolean> {
   const userDn = LDAP_USER_DN_PATTERN.replace("{username}", username.toLowerCase())
   const client = new Client({ url: LDAP_URL })
 
   try {
     await client.bind(userDn, tempPassword)
-
-    const change = new Change({
-      operation: "replace",
-      modification: new Attribute({
-        type: "userPassword",
-        values: [newPassword],
-      }),
-    })
-
-    await client.modify(userDn, [change])
     await client.unbind()
-    return { success: true }
-
-  } catch (error: any) {
+    return true
+  } catch (error) {
     console.error(`[LDAP] Error init for user ${userDn}:`, error)
     
     try { 
       await client.unbind() 
     } catch {}
 
-    if (error?.code === 49) {
-      return { success: false, message: t("init.errors.invalidCredentials") }
+    return false
+  }
+}
+
+/**
+ * Init account by sending SRP salt and verifier to the internal Core API.
+ */
+async function initializeAccountCoreApi(
+  payload: {
+    username: string
+    tempPassword: string
+    srpSalt: string
+    srpVerifier: string
+  },
+  t: (key: string) => string
+): Promise<{ success: boolean; message?: string }> {
+  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/init`
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 400) {
+        return { success: false, message: t("init.errors.invalidCredentials") }
+      }
+      return { success: false, message: t("init.errors.generic") }
     }
 
-    return { 
-      success: false, 
-      message: t("init.errors.ldapError") 
+    return { success: true }
+  } catch (error) {
+    console.error(`[CoreAPI] Error during init for user ${payload.username}:`, error)
+    return {
+      success: false,
+      message: t("init.errors.generic"),
     }
   }
 }
@@ -80,16 +98,15 @@ router.get("/", csrfProtection, (req: any, res) => {
 router.post("/", csrfProtection, async (req: any, res, next) => {
   const t = req.t || ((key: string) => key)
 
-  const username = String(req.body.username || req.body.email || "").trim()
+  const username = String(req.body.username || req.body.email || "").trim().toLowerCase()
   const tempPassword = String(req.body.tempPassword || "")
-  const newPassword = String(req.body.newPassword || "")
-  const confirmPassword = String(req.body.confirmPassword || "")
+  const srpSalt = String(req.body.srpSalt || "")
+  const srpVerifier = String(req.body.srpVerifier || "")
   const actionUrl = urljoin(process.env.BASE_URL || "", "/init")
   
   const isPreFilled = req.body.isPreFilled === "true" || (Boolean(username) && Boolean(tempPassword))
 
-  // Validations côté serveur
-  if (!username || !tempPassword || !newPassword) {
+  if (!username || !tempPassword || !srpSalt || !srpVerifier) {
     return res.render("init", {
       csrfToken: req.csrfToken(),
       action: actionUrl,
@@ -100,30 +117,30 @@ router.post("/", csrfProtection, async (req: any, res, next) => {
     })
   }
 
-  if (newPassword !== confirmPassword) {
-    return res.render("init", {
-      csrfToken: req.csrfToken(),
-      action: actionUrl,
-      hint: username,
-      tempPassword: tempPassword,
-      isPreFilled: isPreFilled,
-      error: t("init.errors.mismatch"),
-    })
-  }
-
-  if (tempPassword === newPassword) {
-    return res.render("init", {
-      csrfToken: req.csrfToken(),
-      action: actionUrl,
-      hint: username,
-      tempPassword: tempPassword,
-      isPreFilled: isPreFilled,
-      error: t("init.errors.samePassword"),
-    })
-  }
-
   try {
-    const result = await initializeAccountLdap(username, tempPassword, newPassword, t)
+    // 1. Vérification préalable du mot de passe temporaire via Bind LDAP
+    const isTempPasswordValid = await verifyTempPasswordLdap(username, tempPassword)
+    if (!isTempPasswordValid) {
+      return res.render("init", {
+        csrfToken: req.csrfToken(),
+        action: actionUrl,
+        hint: username,
+        tempPassword: tempPassword,
+        isPreFilled: isPreFilled,
+        error: t("init.errors.invalidCredentials"),
+      })
+    }
+
+    // 2. Transmettre les vérificateurs SRP à l'API Core interne
+    const result = await initializeAccountCoreApi(
+      {
+        username,
+        tempPassword,
+        srpSalt,
+        srpVerifier,
+      },
+      t
+    )
 
     if (!result.success) {
       return res.render("init", {
