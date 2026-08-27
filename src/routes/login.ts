@@ -146,7 +146,6 @@ router.post("/", csrfProtection, async (req, res, next) => {
   try {
     const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
 
-
     const secret = req.body.secret;
     const secretId = req.body.secretId;
 
@@ -163,6 +162,8 @@ router.post("/", csrfProtection, async (req, res, next) => {
           encryptedData: secret,
           ttlSeconds: 300,
           id: secretId,
+          loginToken: req.body.loginToken,
+          username: username,
         }),
       })
 
