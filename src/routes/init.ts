@@ -4,7 +4,9 @@
 import express from "express"
 import urljoin from "url-join"
 import csrf from "csurf"
-import { Client, Change, Attribute } from "ldapts"
+import { Client } from "ldapts"
+import * as opaque from "@serenity-kit/opaque"
+import { setOpaque, initServerSetup } from "../opaque"
 
 const csrfProtection = csrf({
   cookie: {
@@ -16,50 +18,75 @@ const router = express.Router()
 const LDAP_URL = process.env.LDAP_URL || "ldap://localhost:3890"
 const LDAP_USER_DN_PATTERN = process.env.LDAP_USER_DN_PATTERN || "uid={username},ou=users,dc=domaine,dc=fr"
 
+let serverSetup: string = ""
+
+
+opaque.ready
+  .then(() => {
+    serverSetup = initServerSetup()
+  })
+  .catch((err) => {
+    console.error("[OPAQUE] can't init in  init.ts:", err)
+  })
+
+async function getOrCreateServerSetup(): Promise<string> {
+  if (!serverSetup) {
+    await opaque.ready
+    if (!serverSetup) {
+      serverSetup = initServerSetup()
+    }
+  }
+  return serverSetup
+}
+
 /**
- * Met à jour le mot de passe dans LLDAP
+ * Begin OPAQUE init
  */
-async function initializeAccountLdap(
-  username: string,
-  tempPassword: string,
-  newPassword: string,
-  t: (key: string) => string
-): Promise<{ success: boolean; message?: string }> {
+router.post("/start", async (req, res) => {
+  try {
+    const setup = await getOrCreateServerSetup()
+    const { registrationRequest } = req.body
+
+    if (!registrationRequest) {
+      return res.status(400).json({ error: "registrationRequest manquant" })
+    }
+
+    const  CreateServerRegistrationResponseResult  = opaque.server.createRegistrationResponse({
+      serverSetup: setup,
+      userIdentifier: req.body.username || "",
+      registrationRequest,
+    })
+
+    return res.json(CreateServerRegistrationResponseResult)
+  } catch (err) {
+    console.error("[OPAQUE] Erreur when calling /init/start:", err)
+    return res.status(500).json({ error: "Erreur lors du calcul OPAQUE" })
+  }
+})
+
+/**
+ * Check temp password with Bind LDAP
+ */
+async function verifyTempPasswordLdap(username: string, tempPassword: string): Promise<boolean> {
   const userDn = LDAP_USER_DN_PATTERN.replace("{username}", username.toLowerCase())
   const client = new Client({ url: LDAP_URL })
 
   try {
     await client.bind(userDn, tempPassword)
-
-    const change = new Change({
-      operation: "replace",
-      modification: new Attribute({
-        type: "userPassword",
-        values: [newPassword],
-      }),
-    })
-
-    await client.modify(userDn, [change])
     await client.unbind()
-    return { success: true }
-
-  } catch (error: any) {
+    return true
+  } catch (error) {
     console.error(`[LDAP] Error init for user ${userDn}:`, error)
     
     try { 
       await client.unbind() 
     } catch {}
 
-    if (error?.code === 49) {
-      return { success: false, message: t("init.errors.invalidCredentials") }
-    }
-
-    return { 
-      success: false, 
-      message: t("init.errors.ldapError") 
-    }
+    return false
   }
 }
+
+
 
 router.get("/", csrfProtection, (req: any, res) => {
   const queryUsername = String(req.query.username || req.query.email || "").trim().toLowerCase()
@@ -80,16 +107,14 @@ router.get("/", csrfProtection, (req: any, res) => {
 router.post("/", csrfProtection, async (req: any, res, next) => {
   const t = req.t || ((key: string) => key)
 
-  const username = String(req.body.username || req.body.email || "").trim()
+  const username = String(req.body.username || req.body.email || "").trim().toLowerCase()
   const tempPassword = String(req.body.tempPassword || "")
-  const newPassword = String(req.body.newPassword || "")
-  const confirmPassword = String(req.body.confirmPassword || "")
+  const opaqueRegistrationRecord = String(req.body.opaqueRegistrationRecord || "")
   const actionUrl = urljoin(process.env.BASE_URL || "", "/init")
   
   const isPreFilled = req.body.isPreFilled === "true" || (Boolean(username) && Boolean(tempPassword))
 
-  // Validations côté serveur
-  if (!username || !tempPassword || !newPassword) {
+  if (!username || !tempPassword || !opaqueRegistrationRecord) {
     return res.render("init", {
       csrfToken: req.csrfToken(),
       action: actionUrl,
@@ -100,30 +125,28 @@ router.post("/", csrfProtection, async (req: any, res, next) => {
     })
   }
 
-  if (newPassword !== confirmPassword) {
-    return res.render("init", {
-      csrfToken: req.csrfToken(),
-      action: actionUrl,
-      hint: username,
-      tempPassword: tempPassword,
-      isPreFilled: isPreFilled,
-      error: t("init.errors.mismatch"),
-    })
-  }
-
-  if (tempPassword === newPassword) {
-    return res.render("init", {
-      csrfToken: req.csrfToken(),
-      action: actionUrl,
-      hint: username,
-      tempPassword: tempPassword,
-      isPreFilled: isPreFilled,
-      error: t("init.errors.samePassword"),
-    })
-  }
-
   try {
-    const result = await initializeAccountLdap(username, tempPassword, newPassword, t)
+    // 1. Check temp pass with LDAP
+    const isTempPasswordValid = await verifyTempPasswordLdap(username, tempPassword)
+    if (!isTempPasswordValid) {
+      return res.render("init", {
+        csrfToken: req.csrfToken(),
+        action: actionUrl,
+        hint: username,
+        tempPassword: tempPassword,
+        isPreFilled: isPreFilled,
+        error: t("init.errors.invalidCredentials"),
+      })
+    }
+
+    // 2. Give record to API core
+    const result = await setOpaque(
+      {
+        username,
+        opaque: opaqueRegistrationRecord,
+      },
+      t
+    )
 
     if (!result.success) {
       return res.render("init", {

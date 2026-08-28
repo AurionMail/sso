@@ -21,11 +21,24 @@ block content
           div(class="flex-1 min-w-0 self-center flex items-center gap-2")
             p(class="text-sm text-destructive flex-1 leading-relaxed")= error
 
+      div(id="error-banner" class=`${error ? '' : 'hidden '}mb-5 p-3 rounded-xl border border-destructive/20 bg-destructive/5 flex items-start gap-3` role="alert" aria-live="polite")
+        div(class="w-10 h-10 rounded-full bg-destructive/15 text-destructive flex items-center justify-center flex-shrink-0 shadow-sm")
+          svg(xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-alert w-5 h-5" aria-hidden="true")
+            circle(cx="12" cy="12" r="10")
+            line(x1="12" x2="12" y1="8" y2="12")
+            line(x1="12" x2="12.01" y1="16" y2="16")
+        div(class="flex-1 min-w-0 self-center flex items-center gap-2")
+          p(id="error-message" class="text-sm text-destructive flex-1 leading-relaxed")= error
+
       form(id="login-form" action=action method="POST" class="space-y-5")
         input(type="hidden" name="_csrf" value=csrfToken)
         input(type="hidden" name="challenge" value=challenge)
         input(type="hidden" name="secret" id="secret")
         input(type="hidden" name="secretId" id="secretId")
+        input(type="hidden" name="loginToken" id="loginToken")
+
+        input(type="hidden" name="opaqueSessionId" id="opaqueSessionId")
+        input(type="hidden" name="opaqueKe3" id="opaqueKe3")
 
         fieldset(class="space-y-4")
           div(class="space-y-1.5")
@@ -89,10 +102,14 @@ block content
             class="inline-flex items-center justify-center w-full h-10 px-4 text-xs font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted/50 rounded-xl transition-colors duration-200 cursor-pointer"
           )= t('login.denyAccess')
 
-  script.
+  script(type="module").
+    import * as opaque from 'https://esm.sh/@serenity-kit/opaque';
+
     const form = document.getElementById('login-form');
     const acceptBtn = document.getElementById('accept');
     const btnText = document.getElementById('btn-text');
+    const errorBanner = document.getElementById('error-banner');
+    const errorMessage = document.getElementById('error-message');
 
     const WEBMAIL_DOMAIN_WP = !{JSON.stringify(webmailDomain)};
     const ENCRYPTION_ALGO = 'AES-GCM';
@@ -145,6 +162,12 @@ block content
         seedHex: bufferToHex(seed)
       };
     }
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      errorBanner.classList.remove('hidden');
+      acceptBtn.disabled = false;
+      btnText.textContent = i18n.submit;
+    }
 
     form.addEventListener('submit', async (e) => {
       if (e.submitter && e.submitter.id === 'reject') {
@@ -160,23 +183,59 @@ block content
       const passwordInput = document.getElementById('password');
       const secretIdInput = document.getElementById('secretId');
       const secretInput = document.getElementById('secret');
+      const loginTokenInput = document.getElementById('loginToken');
+      
+      const opaqueSessionIdInput = document.getElementById('opaqueSessionId');
+      const opaqueKe3Input = document.getElementById('opaqueKe3');
+
       const username = emailInput.value.trim();
       const rawPassword = passwordInput.value;
 
       try {
-        const salt = new TextEncoder().encode(`auth_salt_${username}`);
-        const derivedHash = await hashwasm.argon2id({
-          password: rawPassword,
-          salt: salt,
-          parallelism: 1,
-          iterations: 3,
-          memorySize: 65536,
-          hashLength: 32,
-          outputType: 'hex',
+         const salt = new TextEncoder().encode(`auth_salt_${username}`);
+         // this salt is deterministic because it is only used for domain separation. True security comes from the OPAQUE protocol.
+          const password  = await hashwasm.argon2id({
+            password: rawPassword,
+            salt: salt,
+            parallelism: 1,
+            iterations: 3,
+            memorySize: 65536,
+            hashLength: 32,
+            outputType: 'hex',
+          });
+        const { startLoginRequest, clientLoginState } = opaque.client.startLogin({
+          password
         });
 
-        const {ciphertextHex, ivHex, seedHex } = await processSecret(rawPassword);
+        const challengeResponse = await fetch(`/login/opaque/init`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            username, 
+            startLoginRequest 
+          })
+        });
+
+        if (!challengeResponse.ok) {
+          throw new Error('Error when asking for an opaque challenge from the server');
+        }
+
+        const { sessionId, loginResponse } = await challengeResponse.json();
+
+        const { finishLoginRequest, sessionKey } = opaque.client.finishLogin({
+          clientLoginState,
+          loginResponse,
+          password
+        });
+        if(!sessionKey){
+          showError("#{t('login.invalidCredentials')}");
+          return;
+        }
+
+        const { ciphertextHex, ivHex, seedHex } = await processSecret(rawPassword);
         const id = crypto.randomUUID();
+
+        const login_token = crypto.randomUUID();
 
         const iframe = document.createElement('iframe');
         iframe.src = WEBMAIL_DOMAIN_WP + '/bridge-minimal.html';
@@ -187,7 +246,8 @@ block content
           iframe.contentWindow?.postMessage(
             {
               type: 'WRITE_SECRET',
-              secret: { id, seed: seedHex, iv: ivHex }
+              secret: { id, seed: seedHex, iv: ivHex },
+              login_token: login_token
             },
             WEBMAIL_DOMAIN_WP
           );
@@ -199,9 +259,13 @@ block content
             window.removeEventListener('message', handleBridgeConfirmation);
             document.body.removeChild(iframe);
 
-            passwordInput.value = derivedHash;
+            passwordInput.value = '';
             secretInput.value = ciphertextHex;
             secretIdInput.value = id;
+            loginTokenInput.value = login_token;
+            
+            opaqueSessionIdInput.value = sessionId;
+            opaqueKe3Input.value = finishLoginRequest;
 
             HTMLFormElement.prototype.submit.call(form);
           }
@@ -210,7 +274,7 @@ block content
         window.addEventListener('message', handleBridgeConfirmation);
 
       } catch (err) {
-        console.error('Error when crypto :', err);
+        console.error('Error OPAQUE / Bridge :', err);
         btnText.textContent = "#{t('login.submit')}";
         acceptBtn.disabled = false;
       }

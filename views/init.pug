@@ -27,6 +27,8 @@ block content
         if challenge
           input(type="hidden" name="challenge" value=challenge)
 
+        input(type="hidden" name="opaqueRegistrationRecord" id="opaqueRegistrationRecord")
+
         fieldset(class="space-y-4")
           div(class="space-y-1.5")
             label(for="username" class="block text-sm font-medium text-foreground")= t('init.username')
@@ -107,7 +109,9 @@ block content
                 polyline(points="22 4 12 14.01 9 11.01")
               span(id="btn-text")= t('init.submit')
 
-  script.
+  script(type="module").
+    import * as opaque from 'https://esm.sh/@serenity-kit/opaque';
+
     const i18n = {
       submit: "!{t('init.submit')}",
       progress: "!{t('init.progress')}",
@@ -115,6 +119,8 @@ block content
       samePassword: "!{t('init.errors.samePassword')}",
       crypto: "!{t('init.errors.crypto')}"
     };
+
+    const INIT_START_URL =  '/init/start';
 
     const form = document.getElementById('init-form');
     const acceptBtn = document.getElementById('accept');
@@ -129,18 +135,6 @@ block content
       btnText.textContent = i18n.submit;
     }
 
-    async function deriveArgon2(rawPassword, saltBytes) {
-      return await hashwasm.argon2id({
-        password: rawPassword,
-        salt: saltBytes,
-        parallelism: 1,
-        iterations: 3,
-        memorySize: 65536,
-        hashLength: 32,
-        outputType: 'hex',
-      });
-    }
-
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
@@ -148,11 +142,16 @@ block content
       const tempPasswordInput = document.getElementById('tempPassword');
       const newPasswordInput = document.getElementById('newPassword');
       const confirmPasswordInput = document.getElementById('confirmPassword');
+      const opaqueRegistrationRecordInput = document.getElementById('opaqueRegistrationRecord');
 
-      const username = usernameInput.value.trim();
+      const username = usernameInput.value.trim().toLowerCase();
       const rawTempPassword = tempPasswordInput.value;
       const rawNewPassword = newPasswordInput.value;
       const rawConfirmPassword = confirmPasswordInput.value;
+
+      if (!username || !rawTempPassword || !rawNewPassword) {
+        return;
+      }
 
       if (rawNewPassword !== rawConfirmPassword) {
         showError(i18n.mismatch);
@@ -168,17 +167,42 @@ block content
       btnText.textContent = i18n.progress;
 
       try {
-        const salt = new TextEncoder().encode(`auth_salt_${username}`);
+        await opaque.ready;
+        const { registrationRequest, clientRegistrationState } = opaque.client.startRegistration({
+          password: rawNewPassword
+        });
 
-        const derivedNewHash = await deriveArgon2(rawNewPassword, salt);
+        const response = await fetch(INIT_START_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username,
+            registrationRequest: registrationRequest
+          })
+        });
 
-        newPasswordInput.value = derivedNewHash;
-        confirmPasswordInput.value = derivedNewHash;
+        if (!response.ok) {
+          throw new Error("Error when OPAQUE init: " + response.statusText);
+        }
 
-        form.submit();
+        const { registrationResponse} = await response.json();
+
+        console.log(registrationResponse);
+        const { registrationRecord: recordHex } = opaque.client.finishRegistration({
+          clientRegistrationState,
+          registrationResponse,
+          password: rawNewPassword
+        });
+
+        opaqueRegistrationRecordInput.value = recordHex;
+
+        newPasswordInput.value = '';
+        confirmPasswordInput.value = '';
+        console.warn(recordHex);
+        //form.submit();
 
       } catch (err) {
-        console.error('Erreur lors du calcul de la clé crypto :', err);
+        console.error('Erreur lors de la génération du record OPAQUE :', err);
         showError(i18n.crypto);
       }
     });
