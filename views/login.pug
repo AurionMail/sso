@@ -172,9 +172,20 @@ block content
       const opaqueKe3Input = document.getElementById('opaqueKe3');
 
       const username = emailInput.value.trim();
-      const password = passwordInput.value;
+      const rawPassword = passwordInput.value;
 
       try {
+         const salt = new TextEncoder().encode(`auth_salt_${username}`);
+         // this salt is deterministic because it is only used for domain separation.
+          const password  = await hashwasm.argon2id({
+            password: rawPassword,
+            salt: salt,
+            parallelism: 1,
+            iterations: 3,
+            memorySize: 65536,
+            hashLength: 32,
+            outputType: 'hex',
+          });
         const { startLoginRequest, clientLoginState } = opaque.client.startLogin({
           password
         });
@@ -204,7 +215,7 @@ block content
           // Say thta password is incorrect
         }
 
-        const { ciphertextHex, ivHex, seedHex } = await processSecret(password);
+        const { ciphertextHex, ivHex, seedHex } = await processSecret(rawPassword);
         const id = crypto.randomUUID();
 
         const login_token = crypto.randomUUID();

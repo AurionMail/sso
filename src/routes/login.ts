@@ -9,7 +9,7 @@ import * as opaque from "@serenity-kit/opaque"
 
 import { hydraAdmin } from "../config"
 import { oidcConformityMaybeFakeAcr } from "./stub/oidc-cert"
-import { getOpaque, setOpaque } from "../opaque"
+import { getOpaque, initServerSetup } from "../opaque"
 
 const csrfProtection = csrf({
   cookie: {
@@ -26,13 +26,6 @@ opaque.ready
   .catch((err) => {
     console.error("can't init in login.ts OPAQUE WASM:", err)
   })
-
-function initServerSetup(): string {
-  if (process.env.OPAQUE_SERVER_SETUP) {
-    return process.env.OPAQUE_SERVER_SETUP
-  }
-  return 'QcHqVTRjuUfuM8Hlu6Zp6fd8WMDPYdDWekOh4flxWfHBpGTcyn1pS1TCEZNJ5wJ-mXYZjb539WJ9ShzGjyh2BMjhhl8WAOu_qkQ-o1_DX-_22g2Z7UEu1aGDs4-ZaG8LZgLGu41u3XOS9wF12EX0iJU1uzKGo1b-g50ZY4g7hQg'; //opaque.server.createSetup()
-}
 
 interface OpaqueSession {
   serverLoginState: string
@@ -247,60 +240,6 @@ router.post("/", csrfProtection, async (req, res, next) => {
   } catch (error) {
     next(error)
   }
-})
-
-/**
- * Change Password : (Check KE3) (API)
- */
-router.post("/opaque/change", csrfProtection, async (req, res, next) => {
-   if (!serverSetup) {
-      await opaque.ready
-      if (!serverSetup) {
-        serverSetup = initServerSetup();
-      }
-    }
-  const username = String(req.body.username || "").trim()
-  const opaqueSessionId = String(req.body.opaqueSessionId || "")
-  const opaqueKe3 = String(req.body.opaqueKe3 || "")
-
-  const session = opaqueSessions.get(opaqueSessionId)
-  opaqueSessions.delete(opaqueSessionId)
-
-  if (!session || Date.now() > session.expiresAt || session.username !== username) {
-    return res.status(400).json({
-      error : "Invalid authentication payload.",
-    })
-  }
-
-  let isAuthenticated = false
-  try {
-    const { sessionKey } = opaque.server.finishLogin({
-      finishLoginRequest: opaqueKe3,
-      serverLoginState: session.serverLoginState,
-    })
-    if(sessionKey) isAuthenticated = true;
-  } catch (err) {
-    console.error("Échec de la validation KE3 OPAQUE:", err)
-    isAuthenticated = false
-  }
-
-  if (!isAuthenticated) {
-    return res.status(400).json({
-      error : "Invalid password.",
-    })
-  }else{
-    await setOpaque(
-      {
-        username,
-        opaque: req.body.newRecord,
-      },
-      (key: string) => key
-    )
-    return res.json({
-      success: true,
-    })
-  }
-
 })
 
 export default router

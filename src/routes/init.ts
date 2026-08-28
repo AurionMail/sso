@@ -6,7 +6,7 @@ import urljoin from "url-join"
 import csrf from "csurf"
 import { Client } from "ldapts"
 import * as opaque from "@serenity-kit/opaque"
-import { setOpaque } from "../opaque"
+import { setOpaque, initServerSetup } from "../opaque"
 
 const csrfProtection = csrf({
   cookie: {
@@ -20,12 +20,6 @@ const LDAP_USER_DN_PATTERN = process.env.LDAP_USER_DN_PATTERN || "uid={username}
 
 let serverSetup: string = ""
 
-function initServerSetup(): string {
-  if (process.env.OPAQUE_SERVER_SETUP) {
-    return process.env.OPAQUE_SERVER_SETUP
-  }
-  return 'QcHqVTRjuUfuM8Hlu6Zp6fd8WMDPYdDWekOh4flxWfHBpGTcyn1pS1TCEZNJ5wJ-mXYZjb539WJ9ShzGjyh2BMjhhl8WAOu_qkQ-o1_DX-_22g2Z7UEu1aGDs4-ZaG8LZgLGu41u3XOS9wF12EX0iJU1uzKGo1b-g50ZY4g7hQg'; //opaque.server.createSetup()
-}
 
 opaque.ready
   .then(() => {
