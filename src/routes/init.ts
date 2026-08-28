@@ -6,6 +6,7 @@ import urljoin from "url-join"
 import csrf from "csurf"
 import { Client } from "ldapts"
 import * as opaque from "@serenity-kit/opaque"
+import { setOpaque } from "../opaque"
 
 const csrfProtection = csrf({
   cookie: {
@@ -64,7 +65,7 @@ router.post("/start", async (req, res) => {
 
     return res.json(CreateServerRegistrationResponseResult)
   } catch (err) {
-    console.error("[OPAQUE] Erreur lors de /init/start:", err)
+    console.error("[OPAQUE] Erreur when calling /init/start:", err)
     return res.status(500).json({ error: "Erreur lors du calcul OPAQUE" })
   }
 })
@@ -91,44 +92,7 @@ async function verifyTempPasswordLdap(username: string, tempPassword: string): P
   }
 }
 
-/**
- * Init account by sending SRP salt and verifier to the internal Core API.
- */
-async function initializeAccountCoreApi(
-  payload: {
-    username: string
-    registrationRecord: string
-  },
-  t: (key: string) => string
-): Promise<{ success: boolean; message?: string }> {
-  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/init/finalize`
 
-  try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
-      },
-      body: JSON.stringify(payload),
-    })
-
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 400) {
-        return { success: false, message: t("init.errors.invalidCredentials") }
-      }
-      return { success: false, message: t("init.errors.generic") }
-    }
-
-    return { success: true }
-  } catch (error) {
-    console.error(`[CoreAPI] Error during init for user ${payload.username}:`, error)
-    return {
-      success: false,
-      message: t("init.errors.generic"),
-    }
-  }
-}
 
 router.get("/", csrfProtection, (req: any, res) => {
   const queryUsername = String(req.query.username || req.query.email || "").trim().toLowerCase()
@@ -182,10 +146,10 @@ router.post("/", csrfProtection, async (req: any, res, next) => {
     }
 
     // 2. Give record to API core
-    const result = await initializeAccountCoreApi(
+    const result = await setOpaque(
       {
         username,
-        registrationRecord: opaqueRegistrationRecord,
+        opaque: opaqueRegistrationRecord,
       },
       t
     )

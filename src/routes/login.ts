@@ -9,6 +9,7 @@ import * as opaque from "@serenity-kit/opaque"
 
 import { hydraAdmin } from "../config"
 import { oidcConformityMaybeFakeAcr } from "./stub/oidc-cert"
+import { getOpaque, setOpaque } from "../opaque"
 
 const csrfProtection = csrf({
   cookie: {
@@ -47,30 +48,6 @@ setInterval(() => {
   }
 }, 60000)
 
-/**
- * Get OPAQUE Record in Core API
- */
-async function getOpaqueRecordFromCore(username: string): Promise<string | null> {
-  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/opaque`
-
-  try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
-      },
-      body: JSON.stringify({ username }),
-    })
-
-    if (!response.ok) return null
-    const data = await response.json()
-    return data.opaque || null
-  } catch (error) {
-    console.error("Can't get OPAQUE record from Core API:", error)
-    return null
-  }
-}
 
 /**
  * Route 1 : Init OPAQUE (Challenge KE1 -> KE2)
@@ -90,7 +67,7 @@ router.post("/opaque/init", async (req, res) => {
       return res.status(400).json({ error: "username et credentialRequest requis" })
     }
 
-    const registrationRecord = await getOpaqueRecordFromCore(username)
+    const registrationRecord = await getOpaque(username)
     if (!registrationRecord) {
       return res.status(401).json({ error: "Identifiants invalides" })
     }
@@ -114,7 +91,7 @@ router.post("/opaque/init", async (req, res) => {
       loginResponse,
     })
   } catch (err) {
-    console.error("Erreur durant OPAQUE login-init:", err)
+    console.error("Erreur when OPAQUE login-init:", err)
     return res.status(400).json({ error: "Échec de l'initialisation du challenge" })
   }
 })
@@ -270,6 +247,60 @@ router.post("/", csrfProtection, async (req, res, next) => {
   } catch (error) {
     next(error)
   }
+})
+
+/**
+ * Change Password : (Check KE3) (API)
+ */
+router.post("/opaque/change", csrfProtection, async (req, res, next) => {
+   if (!serverSetup) {
+      await opaque.ready
+      if (!serverSetup) {
+        serverSetup = initServerSetup();
+      }
+    }
+  const username = String(req.body.username || "").trim()
+  const opaqueSessionId = String(req.body.opaqueSessionId || "")
+  const opaqueKe3 = String(req.body.opaqueKe3 || "")
+
+  const session = opaqueSessions.get(opaqueSessionId)
+  opaqueSessions.delete(opaqueSessionId)
+
+  if (!session || Date.now() > session.expiresAt || session.username !== username) {
+    return res.status(400).json({
+      error : "Invalid authentication payload.",
+    })
+  }
+
+  let isAuthenticated = false
+  try {
+    const { sessionKey } = opaque.server.finishLogin({
+      finishLoginRequest: opaqueKe3,
+      serverLoginState: session.serverLoginState,
+    })
+    if(sessionKey) isAuthenticated = true;
+  } catch (err) {
+    console.error("Échec de la validation KE3 OPAQUE:", err)
+    isAuthenticated = false
+  }
+
+  if (!isAuthenticated) {
+    return res.status(400).json({
+      error : "Invalid password.",
+    })
+  }else{
+    await setOpaque(
+      {
+        username,
+        opaque: req.body.newRecord,
+      },
+      (key: string) => key
+    )
+    return res.json({
+      success: true,
+    })
+  }
+
 })
 
 export default router
