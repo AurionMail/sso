@@ -28,3 +28,16 @@ CORE_API_INTERNAL_SECRET=ezfeoizrourefgzerrvettyojuipytfdesdzstrye
 ## Note for admins
 - Once account is created with your usual workflow, users need to go to `sso.domain/init` to activate their account.
 - you can give to your users link like this `https://sso.domain/init?username=john.doe&tempPassword=TempSecret123` to fill username and password fields. 
+
+## Make the opaque file
+In the current architecture, we don't have choice to do this. If you find another solution, open a PR/Issue !. We will have to use anoter stack for this app in future.
+ - create directory
+ - npm install @serenity-kit/opaque
+- npm install -D esbuild
+- create `client-entry.js` with
+```
+import { client, ready } from '@serenity-kit/opaque';
+
+export { client, ready };
+```
+- npx esbuild client-entry.js --bundle --format=esm --outfile=public/js/opaque.bundle.js --minify

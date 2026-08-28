@@ -38,7 +38,8 @@
     "errors": {
       "mismatch": "The two new passwords do not match.",
       "samePassword": "The new password must be different from the temporary password.",
-      "crypto": "Cryptographic derivation error."
+      "crypto": "Cryptographic derivation error.",
+      "invalidCredentials": "Invalid username or temporary password."
     }
   }
 }

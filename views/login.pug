@@ -103,7 +103,7 @@ block content
           )= t('login.denyAccess')
 
   script(type="module").
-    import * as opaque from 'https://esm.sh/@serenity-kit/opaque';
+    import * as opaque from '/js/opaque.bundle.js';
 
     const form = document.getElementById('login-form');
     const acceptBtn = document.getElementById('accept');
@@ -166,7 +166,7 @@ block content
       errorMessage.textContent = msg;
       errorBanner.classList.remove('hidden');
       acceptBtn.disabled = false;
-      btnText.textContent = i18n.submit;
+      btnText.textContent = "#{t('login.submit')}";
     }
 
     form.addEventListener('submit', async (e) => {
@@ -275,7 +275,7 @@ block content
 
       } catch (err) {
         console.error('Error OPAQUE / Bridge :', err);
+        showError("#{t('login.invalidCredentials')}");
         btnText.textContent = "#{t('login.submit')}";
-        acceptBtn.disabled = false;
       }
     });

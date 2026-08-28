@@ -135,7 +135,7 @@ router.post("/", csrfProtection, async (req: any, res, next) => {
         hint: username,
         tempPassword: tempPassword,
         isPreFilled: isPreFilled,
-        error: t("init.errors.invalidCredentials"),
+        error: "Invalid username or temporary password.",
       })
     }
 

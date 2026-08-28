@@ -110,7 +110,7 @@ block content
               span(id="btn-text")= t('init.submit')
 
   script(type="module").
-    import * as opaque from 'https://esm.sh/@serenity-kit/opaque';
+    import * as opaque from '/public/js/opaque.bundle.js';
 
     const i18n = {
       submit: "!{t('init.submit')}",
@@ -180,6 +180,7 @@ block content
           });
 
         await opaque.ready;
+        console.log(opaque);
         const { registrationRequest, clientRegistrationState } = opaque.client.startRegistration({
           password
         });
