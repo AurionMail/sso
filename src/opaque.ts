@@ -9,7 +9,7 @@ export function initServerSetup(): string {
  * Get OPAQUE Record in Core API
  */
 export async function getOpaque(username: string): Promise<string | null> {
-  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/opaque`
+  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/opaque/get`
 
   try {
     const response = await fetch(apiUrl, {
