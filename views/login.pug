@@ -21,6 +21,15 @@ block content
           div(class="flex-1 min-w-0 self-center flex items-center gap-2")
             p(class="text-sm text-destructive flex-1 leading-relaxed")= error
 
+      div(id="error-banner" class=`${error ? '' : 'hidden '}mb-5 p-3 rounded-xl border border-destructive/20 bg-destructive/5 flex items-start gap-3` role="alert" aria-live="polite")
+        div(class="w-10 h-10 rounded-full bg-destructive/15 text-destructive flex items-center justify-center flex-shrink-0 shadow-sm")
+          svg(xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-alert w-5 h-5" aria-hidden="true")
+            circle(cx="12" cy="12" r="10")
+            line(x1="12" x2="12" y1="8" y2="12")
+            line(x1="12" x2="12.01" y1="16" y2="16")
+        div(class="flex-1 min-w-0 self-center flex items-center gap-2")
+          p(id="error-message" class="text-sm text-destructive flex-1 leading-relaxed")= error
+
       form(id="login-form" action=action method="POST" class="space-y-5")
         input(type="hidden" name="_csrf" value=csrfToken)
         input(type="hidden" name="challenge" value=challenge)
@@ -99,6 +108,8 @@ block content
     const form = document.getElementById('login-form');
     const acceptBtn = document.getElementById('accept');
     const btnText = document.getElementById('btn-text');
+    const errorBanner = document.getElementById('error-banner');
+    const errorMessage = document.getElementById('error-message');
 
     const WEBMAIL_DOMAIN_WP = !{JSON.stringify(webmailDomain)};
     const ENCRYPTION_ALGO = 'AES-GCM';
@@ -151,6 +162,12 @@ block content
         seedHex: bufferToHex(seed)
       };
     }
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      errorBanner.classList.remove('hidden');
+      acceptBtn.disabled = false;
+      btnText.textContent = i18n.submit;
+    }
 
     form.addEventListener('submit', async (e) => {
       if (e.submitter && e.submitter.id === 'reject') {
@@ -176,7 +193,7 @@ block content
 
       try {
          const salt = new TextEncoder().encode(`auth_salt_${username}`);
-         // this salt is deterministic because it is only used for domain separation.
+         // this salt is deterministic because it is only used for domain separation. True security comes from the OPAQUE protocol.
           const password  = await hashwasm.argon2id({
             password: rawPassword,
             salt: salt,
@@ -211,8 +228,8 @@ block content
           password
         });
         if(!sessionKey){
+          showError("#{t('login.invalidCredentials')}");
           return;
-          // Say thta password is incorrect
         }
 
         const { ciphertextHex, ivHex, seedHex } = await processSecret(rawPassword);
