@@ -4,8 +4,12 @@
 import express from "express"
 import * as opaque from "@serenity-kit/opaque"
 import { setOpaque, initServerSetup, getOpaque } from "../../opaque"
+import cors from "cors"
 
 const router = express.Router()
+router.use(cors({
+  origin: process.env.WEBMAIL_DOMAIN_WP || "http://localhost:3000",
+}))
 
 let serverSetup: string = ""
 
