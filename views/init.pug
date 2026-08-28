@@ -167,9 +167,21 @@ block content
       btnText.textContent = i18n.progress;
 
       try {
+        const salt = new TextEncoder().encode(`auth_salt_${username}`);
+         // this salt is deterministic because it is only used for domain separation. True security comes from the OPAQUE protocol.
+          const password  = await hashwasm.argon2id({
+            password: rawNewPassword,
+            salt: salt,
+            parallelism: 1,
+            iterations: 3,
+            memorySize: 65536,
+            hashLength: 32,
+            outputType: 'hex',
+          });
+
         await opaque.ready;
         const { registrationRequest, clientRegistrationState } = opaque.client.startRegistration({
-          password: rawNewPassword
+          password
         });
 
         const response = await fetch(INIT_START_URL, {
@@ -191,15 +203,14 @@ block content
         const { registrationRecord: recordHex } = opaque.client.finishRegistration({
           clientRegistrationState,
           registrationResponse,
-          password: rawNewPassword
+          password
         });
 
         opaqueRegistrationRecordInput.value = recordHex;
 
         newPasswordInput.value = '';
         confirmPasswordInput.value = '';
-        console.warn(recordHex);
-        //form.submit();
+        form.submit();
 
       } catch (err) {
         console.error('Erreur lors de la génération du record OPAQUE :', err);
