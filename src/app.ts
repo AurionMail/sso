@@ -59,8 +59,8 @@ app.use("/consent", consent)
 app.use("/device", device)
 app.use('/exited', exited )
 app.use('/init', init)
-app.use('/vendor/thinbus-srp', express.static(path.join(__dirname, '..', 'node_modules', 'thinbus-srp')));
-app.use('/vendor/crypto-js', express.static(path.join(__dirname, '..', 'node_modules', 'crypto-js')));
+app.use('/vendor/js-srp6a', express.static(path.join(__dirname, '..', 'node_modules', 'js-srp6a', 'dist')));
+app.use('/vendor/jsbn', express.static(path.join(__dirname, '..','node_modules', 'jsbn')));
 
 // catch 404 and forward to error handler
 app.use((req, res, next) => {

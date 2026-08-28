@@ -18,6 +18,7 @@
   "prettier": "ory-prettier-styles",
   "dependencies": {
     "@ory/hydra-client-fetch": "^2.4.0-alpha.1",
+    "@serenity-kit/opaque": "^1.1.0",
     "body-parser": "^1.20.3",
     "cookie-parser": "^1.4.7",
     "csurf": "^1.11.0",
@@ -28,7 +29,6 @@
     "ldapts": "^9.0.0",
     "morgan": "^1.10.0",
     "pug": "^3.0.3",
-    "thinbus-srp": "^2.0.2",
     "url-join": "^4.0.1"
   },
   "devDependencies": {

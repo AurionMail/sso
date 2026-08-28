@@ -1,13 +1,14 @@
 {
   "compilerOptions": {
     "resolveJsonModule": true,
-    "target": "es6",
-    "module": "commonjs",
-    "lib": ["es2019", "dom"],
+    "target": "es2020",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2020", "dom"],
     "outDir": "./lib",
     "rootDir": "./src",
     "strict": true,
-    "typeRoots": ["./typings"],
+    "typeRoots": ["./typings", "./node_modules/@types"],
     "esModuleInterop": true
   },
   "exclude": ["contrib"]

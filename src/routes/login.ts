@@ -5,11 +5,11 @@ import express from "express"
 import url from "url"
 import urljoin from "url-join"
 import csrf from "csurf"
+import * as opaque from "@serenity-kit/opaque"
 
 import { hydraAdmin } from "../config"
 import { oidcConformityMaybeFakeAcr } from "./stub/oidc-cert"
 
-// Sets up csrf protection
 const csrfProtection = csrf({
   cookie: {
     sameSite: "lax",
@@ -17,11 +17,41 @@ const csrfProtection = csrf({
 })
 const router = express.Router()
 
+let serverSetup: any = null
+opaque.ready
+  .then(() => {
+    serverSetup = initServerSetup();
+      })
+  .catch((err) => {
+    console.error("can't init in login.ts OPAQUE WASM:", err)
+  })
+
+function initServerSetup(): string {
+  if (process.env.OPAQUE_SERVER_SETUP) {
+    return process.env.OPAQUE_SERVER_SETUP
+  }
+  return 'QcHqVTRjuUfuM8Hlu6Zp6fd8WMDPYdDWekOh4flxWfHBpGTcyn1pS1TCEZNJ5wJ-mXYZjb539WJ9ShzGjyh2BMjhhl8WAOu_qkQ-o1_DX-_22g2Z7UEu1aGDs4-ZaG8LZgLGu41u3XOS9wF12EX0iJU1uzKGo1b-g50ZY4g7hQg'; //opaque.server.createSetup()
+}
+
+interface OpaqueSession {
+  serverLoginState: string
+  username: string
+  expiresAt: number
+}
+const opaqueSessions = new Map<string, OpaqueSession>()
+
+setInterval(() => {
+  const now = Date.now()
+  for (const [id, session] of opaqueSessions.entries()) {
+    if (now > session.expiresAt) opaqueSessions.delete(id)
+  }
+}, 60000)
+
 /**
- * Appelle l'API interne Go pour vérifier la preuve SRP (Étape 2)
+ * Get OPAQUE Record in Core API
  */
-async function verifySrpWithCoreApi(sessionId: string, a: string, m1: string): Promise<boolean> {
-  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/srp/verify`
+async function getOpaqueRecordFromCore(username: string): Promise<string | null> {
+  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/opaque`
 
   try {
     const response = await fetch(apiUrl, {
@@ -30,43 +60,77 @@ async function verifySrpWithCoreApi(sessionId: string, a: string, m1: string): P
         "Content-Type": "application/json",
         "Authorization": `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
       },
-      body: JSON.stringify({
-        sessionId: sessionId,
-        a: a,
-        m1: m1,
-      }),
+      body: JSON.stringify({ username }),
     })
 
-    if (!response.ok) {
-      console.error(`SRP Verification failed on Core API: ${response.status} ${response.statusText}`)
-      return false
-    }
-
-    // response.json() with { token, m2 } returned by  Core API
-    return true
+    if (!response.ok) return null
+    const data = await response.json()
+    return data.opaque || null
   } catch (error) {
-    console.error("Erreur de communication avec l'API Core lors du SRP verify:", error)
-    return false
+    console.error("Can't get OPAQUE record from Core API:", error)
+    return null
   }
 }
 
-router.get("/", csrfProtection, (req, res, next) => {
-  // Parses the URL query
-  const query = url.parse(req.url, true).query
+/**
+ * Route 1 : Init OPAQUE (Challenge KE1 -> KE2)
+ */
+router.post("/opaque/init", async (req, res) => {
+  try {
+    if (!serverSetup) {
+      await opaque.ready
+      if (!serverSetup) {
+        initServerSetup()
+      }
+    }
 
-  // The challenge is used to fetch information about the login request from ORY Hydra.
+    const { username, startLoginRequest } = req.body
+
+    if (!username || !startLoginRequest) {
+      return res.status(400).json({ error: "username et credentialRequest requis" })
+    }
+
+    const registrationRecord = await getOpaqueRecordFromCore(username)
+    if (!registrationRecord) {
+      return res.status(401).json({ error: "Identifiants invalides" })
+    }
+
+    const { serverLoginState, loginResponse } = opaque.server.startLogin({
+      serverSetup,
+      userIdentifier: username,
+      registrationRecord,
+      startLoginRequest,
+    })
+
+    const sessionId = crypto.randomUUID()
+    opaqueSessions.set(sessionId, {
+      serverLoginState,
+      username,
+      expiresAt: Date.now() + 2 * 60 * 1000, //2min
+    })
+
+    return res.json({
+      sessionId,
+      loginResponse,
+    })
+  } catch (err) {
+    console.error("Erreur durant OPAQUE login-init:", err)
+    return res.status(400).json({ error: "Échec de l'initialisation du challenge" })
+  }
+})
+
+router.get("/", csrfProtection, (req, res, next) => {
+  const query = url.parse(req.url, true).query
   const challenge = String(query.login_challenge)
+
   if (!challenge) {
     next(new Error("Expected a login challenge to be set but received none."))
     return
   }
 
   hydraAdmin
-    .getOAuth2LoginRequest({
-      loginChallenge: challenge,
-    })
+    .getOAuth2LoginRequest({ loginChallenge: challenge })
     .then((loginRequest) => {
-      // If hydra was already able to authenticate the user, skip will be true and we do not need to re-authenticate the user.
       if (loginRequest.skip) {
         return hydraAdmin
           .acceptOAuth2LoginRequest({
@@ -80,24 +144,30 @@ router.get("/", csrfProtection, (req, res, next) => {
           })
       }
 
-      // If authentication can't be skipped we MUST show the login UI.
       res.render("login", {
         csrfToken: req.csrfToken(),
         challenge: challenge,
         action: urljoin(process.env.BASE_URL || "", "/login"),
         hint: loginRequest.oidc_context?.login_hint || "",
         webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
-        coreApiDomain: process.env.CORE_API_URL,
+        ssoDomain: process.env.BASE_URL || "",
       })
     })
     .catch(next)
 })
 
-// Route POST : Traite la soumission du formulaire et effectue le SRP Step 2
+/**
+ * Route 2 : (Check KE3)
+ */
 router.post("/", csrfProtection, async (req, res, next) => {
+   if (!serverSetup) {
+      await opaque.ready
+      if (!serverSetup) {
+        serverSetup = initServerSetup();
+      }
+    }
   const challenge = req.body.challenge
 
-    // Looks like the consent request was denied by the user
   if (req.body.submit === "Deny access" || req.body.btn_submit === "Deny access") {
     return hydraAdmin
       .rejectOAuth2LoginRequest({
@@ -114,11 +184,13 @@ router.post("/", csrfProtection, async (req, res, next) => {
   }
 
   const username = String(req.body.username || "").trim()
-  const srpSessionId = String(req.body.srpSessionId || "")
-  const srpA = String(req.body.srpA || "")
-  const srpM1 = String(req.body.srpM1 || "")
+  const opaqueSessionId = String(req.body.opaqueSessionId || "")
+  const opaqueKe3 = String(req.body.opaqueKe3 || "")
 
-  if (!srpSessionId || !srpA || !srpM1) {
+  const session = opaqueSessions.get(opaqueSessionId)
+  opaqueSessions.delete(opaqueSessionId) // Consommation à usage unique (burn after reading)
+
+  if (!session || Date.now() > session.expiresAt || session.username !== username) {
     return res.render("login", {
       csrfToken: req.csrfToken(),
       challenge: challenge,
@@ -126,10 +198,21 @@ router.post("/", csrfProtection, async (req, res, next) => {
       hint: username,
       error: "Invalid authentication payload.",
       webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
-      coreApiDomain: process.env.CORE_API_URL,
+      ssoDomain: process.env.BASE_URL || "",
     })
   }
-  const isAuthenticated = await verifySrpWithCoreApi(srpSessionId, srpA, srpM1)
+
+  let isAuthenticated = false
+  try {
+    const { sessionKey } = opaque.server.finishLogin({
+      finishLoginRequest: opaqueKe3,
+      serverLoginState: session.serverLoginState,
+    })
+    if(sessionKey) isAuthenticated = true;
+  } catch (err) {
+    console.error("Échec de la validation KE3 OPAQUE:", err)
+    isAuthenticated = false
+  }
 
   if (!isAuthenticated) {
     return res.render("login", {
@@ -139,18 +222,18 @@ router.post("/", csrfProtection, async (req, res, next) => {
       hint: username,
       error: "Incorrect username or password.",
       webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
-      coreApiDomain: process.env.CORE_API_URL,
+      ssoDomain: process.env.BASE_URL || "",
     })
   }
-  // Seems like the user authenticated! Let's tell hydra...
+
   try {
     const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
 
-    const secret = req.body.secret;
-    const secretId = req.body.secretId;
+    const secret = req.body.secret
+    const secretId = req.body.secretId
 
     if (secret && secretId) {
-    const apiUrl = `${process.env.CORE_API_URL}/api/internal/bridge/secret`;
+      const apiUrl = `${process.env.CORE_API_URL}/api/internal/bridge/secret`
 
       const response = await fetch(apiUrl, {
         method: "POST",
@@ -168,7 +251,7 @@ router.post("/", csrfProtection, async (req, res, next) => {
       })
 
       if (!response.ok) {
-        throw new Error(`Erreur API Bridge: ${response.status} ${response.statusText}`)
+        throw new Error(`Error API Bridge: ${response.status} ${response.statusText}`)
       }
     }
     const { redirect_to } = await hydraAdmin.acceptOAuth2LoginRequest({

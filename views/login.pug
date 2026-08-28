@@ -28,9 +28,8 @@ block content
         input(type="hidden" name="secretId" id="secretId")
         input(type="hidden" name="loginToken" id="loginToken")
 
-        input(type="hidden" name="srpSessionId" id="srpSessionId")
-        input(type="hidden" name="srpA" id="srpA")
-        input(type="hidden" name="srpM1" id="srpM1")
+        input(type="hidden" name="opaqueSessionId" id="opaqueSessionId")
+        input(type="hidden" name="opaqueKe3" id="opaqueKe3")
 
         fieldset(class="space-y-4")
           div(class="space-y-1.5")
@@ -94,27 +93,14 @@ block content
             class="inline-flex items-center justify-center w-full h-10 px-4 text-xs font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted/50 rounded-xl transition-colors duration-200 cursor-pointer"
           )= t('login.denyAccess')
 
-  script(src="/vendor/crypto-js/crypto-js.js")
   script(type="module").
-    const rfc5054 = {
-      N_base10: "21766174458617435773191008891802753781907668374255538511144643224689886235383840957210909013086056401571399717235807266581649606472148410291413364152197364477180887395655483738115072677402235101762521901569820740293149529620419333266262073471054548368736039519702486226506248861060256971802984953561121442680157668000761429988222457090413873973970171927093992114751765168063614761119615476233422096442783117971236371647333871414335895773474667308967050807005509320424799678417036867928316761272274230314067548291133582479583061439577559347101961771406173684378522703483495337037655006751328447510550299250924469288819",
-      g_base10: "2",
-      k_base16: "5b9e8ef059c6b32ea59fc1d322d37f04aa30bae5aa9003b8321e21ddb04e300"
-    };
-
-    const clientModule = await import("/vendor/thinbus-srp/client.mjs");
-    const SRP6JavascriptClientSession = clientModule.default(
-      rfc5054.N_base10,
-      rfc5054.g_base10,
-      rfc5054.k_base16
-    );
+    import * as opaque from 'https://esm.sh/@serenity-kit/opaque';
 
     const form = document.getElementById('login-form');
     const acceptBtn = document.getElementById('accept');
     const btnText = document.getElementById('btn-text');
 
     const WEBMAIL_DOMAIN_WP = !{JSON.stringify(webmailDomain)};
-    const CORE_API_DOMAIN = !{JSON.stringify(coreApiDomain)};
     const ENCRYPTION_ALGO = 'AES-GCM';
     const HKDF_SALT = new Uint8Array(16);
 
@@ -181,32 +167,44 @@ block content
       const secretIdInput = document.getElementById('secretId');
       const secretInput = document.getElementById('secret');
       const loginTokenInput = document.getElementById('loginToken');
-      const srpSessionIdInput = document.getElementById('srpSessionId');
-      const srpAInput = document.getElementById('srpA');
-      const srpM1Input = document.getElementById('srpM1');
+      
+      const opaqueSessionIdInput = document.getElementById('opaqueSessionId');
+      const opaqueKe3Input = document.getElementById('opaqueKe3');
 
       const username = emailInput.value.trim();
-      const rawPassword = passwordInput.value;
+      const password = passwordInput.value;
 
       try {
-        const srpClient = new SRP6JavascriptClientSession();
-        srpClient.step1(username, rawPassword);
-
-        const response = await fetch(`${CORE_API_DOMAIN}/api/auth/srp/challenge`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username })
+        const { startLoginRequest, clientLoginState } = opaque.client.startLogin({
+          password
         });
 
-        if (!response.ok) {
-          throw new Error('Error when SRP : SRP 01');
+        const challengeResponse = await fetch(`/login/opaque/init`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            username, 
+            startLoginRequest 
+          })
+        });
+
+        if (!challengeResponse.ok) {
+          throw new Error('Error when asking for an opaque challenge from the server');
         }
 
-        const { sessionId, salt, B } = await response.json();
+        const { sessionId, loginResponse } = await challengeResponse.json();
 
-        const credentials = srpClient.step2(salt, B);
+        const { finishLoginRequest, sessionKey } = opaque.client.finishLogin({
+          clientLoginState,
+          loginResponse,
+          password
+        });
+        if(!sessionKey){
+          return;
+          // Say thta password is incorrect
+        }
 
-        const { ciphertextHex, ivHex, seedHex } = await processSecret(rawPassword);
+        const { ciphertextHex, ivHex, seedHex } = await processSecret(password);
         const id = crypto.randomUUID();
 
         const login_token = crypto.randomUUID();
@@ -237,9 +235,9 @@ block content
             secretInput.value = ciphertextHex;
             secretIdInput.value = id;
             loginTokenInput.value = login_token;
-            srpSessionIdInput.value = sessionId;
-            srpAInput.value = credentials.A;
-            srpM1Input.value = credentials.M1;
+            
+            opaqueSessionIdInput.value = sessionId;
+            opaqueKe3Input.value = finishLoginRequest;
 
             HTMLFormElement.prototype.submit.call(form);
           }
@@ -248,7 +246,7 @@ block content
         window.addEventListener('message', handleBridgeConfirmation);
 
       } catch (err) {
-        console.error('Erreur durant la séquence SRP / Bridge :', err);
+        console.error('Error OPAQUE / Bridge :', err);
         btnText.textContent = "#{t('login.submit')}";
         acceptBtn.disabled = false;
       }

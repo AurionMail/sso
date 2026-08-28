@@ -5,6 +5,7 @@ import express from "express"
 import urljoin from "url-join"
 import csrf from "csurf"
 import { Client } from "ldapts"
+import * as opaque from "@serenity-kit/opaque"
 
 const csrfProtection = csrf({
   cookie: {
@@ -16,8 +17,60 @@ const router = express.Router()
 const LDAP_URL = process.env.LDAP_URL || "ldap://localhost:3890"
 const LDAP_USER_DN_PATTERN = process.env.LDAP_USER_DN_PATTERN || "uid={username},ou=users,dc=domaine,dc=fr"
 
+let serverSetup: string = ""
+
+function initServerSetup(): string {
+  if (process.env.OPAQUE_SERVER_SETUP) {
+    return process.env.OPAQUE_SERVER_SETUP
+  }
+  return 'QcHqVTRjuUfuM8Hlu6Zp6fd8WMDPYdDWekOh4flxWfHBpGTcyn1pS1TCEZNJ5wJ-mXYZjb539WJ9ShzGjyh2BMjhhl8WAOu_qkQ-o1_DX-_22g2Z7UEu1aGDs4-ZaG8LZgLGu41u3XOS9wF12EX0iJU1uzKGo1b-g50ZY4g7hQg'; //opaque.server.createSetup()
+}
+
+opaque.ready
+  .then(() => {
+    serverSetup = initServerSetup()
+  })
+  .catch((err) => {
+    console.error("[OPAQUE] can't init in  init.ts:", err)
+  })
+
+async function getOrCreateServerSetup(): Promise<string> {
+  if (!serverSetup) {
+    await opaque.ready
+    if (!serverSetup) {
+      serverSetup = initServerSetup()
+    }
+  }
+  return serverSetup
+}
+
 /**
- * Check temporary password against LDAP by attempting to bind with the provided username and temporary password.
+ * Begin OPAQUE init
+ */
+router.post("/start", async (req, res) => {
+  try {
+    const setup = await getOrCreateServerSetup()
+    const { registrationRequest } = req.body
+
+    if (!registrationRequest) {
+      return res.status(400).json({ error: "registrationRequest manquant" })
+    }
+
+    const  CreateServerRegistrationResponseResult  = opaque.server.createRegistrationResponse({
+      serverSetup: setup,
+      userIdentifier: req.body.username || "",
+      registrationRequest,
+    })
+
+    return res.json(CreateServerRegistrationResponseResult)
+  } catch (err) {
+    console.error("[OPAQUE] Erreur lors de /init/start:", err)
+    return res.status(500).json({ error: "Erreur lors du calcul OPAQUE" })
+  }
+})
+
+/**
+ * Check temp password with Bind LDAP
  */
 async function verifyTempPasswordLdap(username: string, tempPassword: string): Promise<boolean> {
   const userDn = LDAP_USER_DN_PATTERN.replace("{username}", username.toLowerCase())
@@ -44,13 +97,11 @@ async function verifyTempPasswordLdap(username: string, tempPassword: string): P
 async function initializeAccountCoreApi(
   payload: {
     username: string
-    tempPassword: string
-    srpSalt: string
-    srpVerifier: string
+    registrationRecord: string
   },
   t: (key: string) => string
 ): Promise<{ success: boolean; message?: string }> {
-  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/init`
+  const apiUrl = `${process.env.CORE_API_URL}/api/internal/auth/init/finalize`
 
   try {
     const response = await fetch(apiUrl, {
@@ -100,13 +151,12 @@ router.post("/", csrfProtection, async (req: any, res, next) => {
 
   const username = String(req.body.username || req.body.email || "").trim().toLowerCase()
   const tempPassword = String(req.body.tempPassword || "")
-  const srpSalt = String(req.body.srpSalt || "")
-  const srpVerifier = String(req.body.srpVerifier || "")
+  const opaqueRegistrationRecord = String(req.body.opaqueRegistrationRecord || "")
   const actionUrl = urljoin(process.env.BASE_URL || "", "/init")
   
   const isPreFilled = req.body.isPreFilled === "true" || (Boolean(username) && Boolean(tempPassword))
 
-  if (!username || !tempPassword || !srpSalt || !srpVerifier) {
+  if (!username || !tempPassword || !opaqueRegistrationRecord) {
     return res.render("init", {
       csrfToken: req.csrfToken(),
       action: actionUrl,
@@ -118,7 +168,7 @@ router.post("/", csrfProtection, async (req: any, res, next) => {
   }
 
   try {
-    // 1. Vérification préalable du mot de passe temporaire via Bind LDAP
+    // 1. Check temp pass with LDAP
     const isTempPasswordValid = await verifyTempPasswordLdap(username, tempPassword)
     if (!isTempPasswordValid) {
       return res.render("init", {
@@ -131,13 +181,11 @@ router.post("/", csrfProtection, async (req: any, res, next) => {
       })
     }
 
-    // 2. Transmettre les vérificateurs SRP à l'API Core interne
+    // 2. Give record to API core
     const result = await initializeAccountCoreApi(
       {
         username,
-        tempPassword,
-        srpSalt,
-        srpVerifier,
+        registrationRecord: opaqueRegistrationRecord,
       },
       t
     )
