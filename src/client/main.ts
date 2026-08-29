@@ -119,8 +119,8 @@ async function init() {
         }
       })
     } catch (err) {
-      console.error("Erreur lors du montage de la page Init :", err)
-      appTarget.innerHTML = `<div class="p-4 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm">Impossible de charger la page d'initialisation.</div>`
+      console.error(err)
+      appTarget.innerHTML = `<div class="p-4 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm">Can't load.</div>`
     }
     return
   }
@@ -129,12 +129,11 @@ async function init() {
   const challenge = searchParams.get('login_challenge')
 
   if (!challenge) {
-    appTarget.innerHTML = `<div class="p-4 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm">Erreur : Paramètre 'login_challenge' manquant.</div>`
+    appTarget.innerHTML = `<div class="p-4 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm">Not Found</div>`
     return
   }
 
   try {
-    // Appel du point d'entrée /login avec l'en-tête JSON
     const res = await fetch(`/login?login_challenge=${encodeURIComponent(challenge)}`, {
       headers: {
         'Accept': 'application/json'

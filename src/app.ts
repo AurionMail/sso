@@ -71,33 +71,37 @@ const isProd = true;
     })
   }
 
-// catch 404 and forward to error handler
-app.use((req, res, next) => {
-  next(new Error("Not Found"))
-})
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error("Express Error:", err.stack || err)
 
-// error handlers
+  const statusCode = err.status || err.statusCode || 500
 
-// development error handler
-// will print stacktrace
-if (app.get("env") === "development") {
-  app.use((err: Error, req: Request, res: Response) => {
-    res.status(500)
-    res.render("error", {
-      message: err.message,
-      error: err,
+  if (req.xhr || req.headers.accept?.includes("application/json")) {
+    return res.status(statusCode).json({
+      error: err.message || "Internal Server Error",
     })
-  })
-}
+  }
 
-// production error handler
-// no stacktraces leaked to user
-app.use((err: Error, req: Request, res: Response) => {
-  res.status(500)
-  res.render("error", {
-    message: err.message,
-    error: {},
-  })
+  res.status(statusCode).send(`
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Erreur ${statusCode}</title>
+        <style>
+          body { font-family: system-ui, sans-serif; padding: 2rem; max-width: 600px; margin: 0 auto; background: #f4f4f5; color: #18181b; }
+          .card { background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e4e4e7; }
+          h1 { color: #dc2626; margin-top: 0; font-size: 1.25rem; }
+          pre { background: #18181b; color: #f4f4f5; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.875rem; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>Error (${statusCode})</h1>
+          <p>${err.message || "Error"}</p>
+        </div>
+      </body>
+    </html>
+  `)
 })
 
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
