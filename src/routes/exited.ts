@@ -11,8 +11,6 @@ router.get("/", (req, res, next) => {
       webmailDomain: process.env.WEBMAIL_DOMAIN_WP || "/"
     })
   }
-
-  // Sinon, passe la main au middleware SPA (index.html)
   next()
 })
 

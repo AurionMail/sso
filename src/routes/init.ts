@@ -86,14 +86,13 @@ async function verifyTempPasswordLdap(username: string, tempPassword: string): P
 }
 
 /**
- * GET /init - Métadonnées d'initialisation
+ * GET /init
  */
 router.get("/", csrfProtection, (req, res, next) => {
   const queryUsername = String(req.query.username || req.query.email || "").trim().toLowerCase()
   const queryTempPassword = String(req.query.tempPassword || "")
   const isPreFilled = Boolean(queryUsername && queryTempPassword)
 
-  // API Client Svelte
   if (req.xhr || req.headers.accept?.includes("application/json")) {
     return res.json({
       csrfToken: req.csrfToken(),
@@ -104,13 +103,11 @@ router.get("/", csrfProtection, (req, res, next) => {
       error: req.query.error ? String(req.query.error) : null,
     })
   }
-
-  // HTML direct -> Passage à Vite / index.html
   next()
 })
 
 /**
- * POST /init - Traitement de la finalisation OPAQUE
+ * POST /init
  */
 router.post("/", csrfProtection, async (req, res, next) => {
   const t = req.t || ((key: string) => key)
@@ -128,7 +125,7 @@ router.post("/", csrfProtection, async (req, res, next) => {
   }
 
   try {
-    // 1. Validation du mot de passe temporaire via LDAP
+    // 1. Valid temp password with LDAP Bind
     const isTempPasswordValid = await verifyTempPasswordLdap(username, tempPassword)
     if (!isTempPasswordValid) {
       const errorMsg = "Nom d'utilisateur ou mot de passe temporaire invalide."
@@ -136,7 +133,7 @@ router.post("/", csrfProtection, async (req, res, next) => {
       return res.redirect(`/init?error=${encodeURIComponent(errorMsg)}`)
     }
 
-    // 2. Transmission du record à l'API Core
+    // 2. Set OPAQUE registration record
     const result = await setOpaque(
       {
         username,

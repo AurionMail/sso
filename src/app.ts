@@ -11,6 +11,7 @@ import * as i18nextMiddleware from "i18next-http-middleware"
 import Backend from "i18next-fs-backend"
 
 import conf from "./routes/conf.js"
+import index from "./routes/index.js"
 import login from "./routes/login.js"
 import logout from "./routes/logout.js"
 import device from "./routes/device.js"
@@ -20,8 +21,6 @@ import changePassword from "./routes/api/changePassword.js"
 async function initApp() {
 const app = express()
 
-
-// Configuration d'i18next
 i18next
   .use(Backend)
   .use(i18nextMiddleware.LanguageDetector)
@@ -46,7 +45,7 @@ app.use(cookieParser())
 app.use('/public', express.static(path.join(import.meta.dirname,'..', "public")))
 
 app.use(i18nextMiddleware.handle(i18next))
-
+app.use("/", index)
 app.use("/login", login)
 app.use("/conf", conf)
 app.use("/logout", logout)

@@ -11,7 +11,7 @@ const csrfProtection = csrf({ cookie: true })
 const router = express.Router()
 
 /**
- * GET /logout - Demande de déconnexion unitaire
+ * GET /logout
  */
 router.get("/", csrfProtection, (req, res, next) => {
   const query = url.parse(req.url, true).query
@@ -25,7 +25,7 @@ router.get("/", csrfProtection, (req, res, next) => {
   hydraAdmin
     .getOAuth2LogoutRequest({ logoutChallenge: challenge })
     .then(() => {
-      // Si appel SPA Fetch -> Envoie JSON
+      // XHR or fetch request: return JSON
       if (req.xhr || req.headers.accept?.includes("application/json")) {
         return res.json({
           csrfToken: req.csrfToken(),
@@ -36,14 +36,14 @@ router.get("/", csrfProtection, (req, res, next) => {
         })
       }
 
-      // Si navigation directe -> Délégation au serveur Vite / index.html
+    //direct : render page
       next()
     })
     .catch(next)
 })
 
 /**
- * POST /logout - Traitement de la confirmation ou de l'annulation
+ * POST /logout
  */
 router.post("/", csrfProtection, (req, res, next) => {
   const challenge = req.body.challenge
@@ -73,7 +73,7 @@ router.post("/", csrfProtection, (req, res, next) => {
 })
 
 /**
- * GET /logout/all - Page de déconnexion de tous les appareils
+ * GET /logout/all
  */
 router.get("/all", csrfProtection, (req, res, next) => {
   if (req.xhr || req.headers.accept?.includes("application/json")) {
@@ -86,7 +86,7 @@ router.get("/all", csrfProtection, (req, res, next) => {
 })
 
 /**
- * POST /logout/all - Invalidation globale des sessions et tokens
+ * POST /logout/all
  */
 router.post("/all", csrfProtection, async (req, res, next) => {
   const token = req.body.token
@@ -115,7 +115,6 @@ router.post("/all", csrfProtection, async (req, res, next) => {
     const data = await response.json()
     const username = data.email.split("@")[0]
 
-    // Invalidation des tokens sur l'API Aurion Core
     const invalidateResponse = await fetch(`${process.env.CORE_API_URL}/api/auth/logout`, {
       method: "GET",
       headers: {
@@ -124,7 +123,6 @@ router.post("/all", csrfProtection, async (req, res, next) => {
       },
     })
 
-    // Révocation des sessions Hydra
     await hydraAdmin.revokeOAuth2LoginSessions({ subject: username })
     await hydraAdmin.revokeOAuth2ConsentSessions({ subject: username, all: true })
 

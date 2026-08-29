@@ -40,7 +40,7 @@ setInterval(() => {
 }, 60000)
 
 /**
- * Route 1 : Init OPAQUE (Challenge KE1 -> KE2)
+ * 1 : Init OPAQUE (KE1 -> KE2)
  */
 router.post("/opaque/init", async (req, res) => {
   try {
@@ -82,7 +82,7 @@ router.post("/opaque/init", async (req, res) => {
     })
   } catch (err) {
     console.error("Error when OPAQUE login-init:", err)
-    return res.status(400).json({ error: "Échec de l'initialisation du challenge" })
+    return res.status(400).json({ error: "Can't init challenge" })
   }
 })
 
@@ -126,7 +126,7 @@ router.get("/", csrfProtection, async (req, res, next) => {
 })
 
 /**
- * Route 2 : Post final et validation KE3
+ * 2 : Valid KE3
  */
 router.post("/", csrfProtection, async (req, res, next) => {
   if (!serverSetup) {
@@ -174,7 +174,7 @@ router.post("/", csrfProtection, async (req, res, next) => {
     })
     if (sessionKey) isAuthenticated = true
   } catch (err) {
-    console.error("Échec de la validation KE3 OPAQUE:", err)
+    console.error("Can't validate KE3 OPAQUE:", err)
     isAuthenticated = false
   }
 
