@@ -11,6 +11,7 @@ import i18nextMiddleware from "i18next-http-middleware"
 import Backend from "i18next-fs-backend"
 
 import routes from "./routes"
+import conf from "./routes/conf"
 import login from "./routes/login"
 import logout from "./routes/logout"
 import consent from "./routes/consent"
@@ -43,8 +44,6 @@ i18next
     },
   })
 
-// uncomment after placing your favicon in /public
-//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 app.use(logger("dev"))
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: false }))
@@ -55,6 +54,7 @@ app.use(i18nextMiddleware.handle(i18next))
 
 app.use("/", routes)
 app.use("/login", login)
+app.use("/conf", conf)
 app.use("/logout", logout)
 app.use("/consent", consent)
 app.use("/device", device)
