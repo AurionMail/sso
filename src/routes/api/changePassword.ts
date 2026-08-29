@@ -3,7 +3,7 @@
 
 import express from "express"
 import * as opaque from "@serenity-kit/opaque"
-import { setOpaque, initServerSetup, getOpaque } from "../../opaque"
+import { setOpaque, initServerSetup, getOpaque } from "../../opaque.js"
 import cors from "cors"
 
 const router = express.Router()
