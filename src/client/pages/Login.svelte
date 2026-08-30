@@ -160,6 +160,7 @@
       <input type="hidden" name="loginToken" value={loginTokenInput} />
       <input type="hidden" name="opaqueSessionId" value={opaqueSessionIdInput} />
       <input type="hidden" name="opaqueKe3" value={opaqueKe3Input} />
+      <input type="hidden" name="username" value={username} />
 
       <fieldset class="space-y-4">
         <div class="space-y-1.5">
@@ -168,7 +169,6 @@
             <input
               type="text"
               id="username"
-              name="username"
               bind:value={username}
               required
               autocomplete="username"
