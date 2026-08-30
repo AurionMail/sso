@@ -29,7 +29,7 @@ OPAQUE_SERVER_SETUP='bad_value'
 ```
 ## Contributing
 ### Code
-Simply make a  !
+Simply make a  PR!
 ### Translation
 Do you want to add or edit your language ? Take the english source (`/locales/en/translation.json`), edit it with your lang and put in a new directory `/locales/code/translation.json` with code the [lang-code](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes) (set 1) of your language.
 ## Note for admins
