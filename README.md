@@ -1,7 +1,7 @@
 # Aurion SSO
 This app is used by Hydra to authenticate users. It ensure 0K connexion and never share the main password.
 
-For more details, see docs repo
+For more details, see docs repo.
 
 ## Development
 - `npm install`
@@ -24,20 +24,14 @@ WEBMAIL_DOMAIN_WP=https://officialweb.mail.aurionmail.org
 CRYPTPAD_DOMAIN_WP=https://pad.aurionmail.org
 CORE_API_URL=https://aurion.mail.aurionmail.org
 CORE_API_INTERNAL_SECRET=ezfeoizrourefgzerrvettyojuipytfdesdzstrye
+# Use the /conf endpoint to get a valid OPAQUE_SERVER_SETUP value
+OPAQUE_SERVER_SETUP='bad_value'
 ```
+## Contributing
+### Code
+Simply make a  PR!
+### Translation
+Do you want to add or edit your language ? Take the english source (`/locales/en/translation.json`), edit it with your lang and put in a new directory `/locales/code/translation.json` with code the [lang-code](https://en.wikipedia.org/wiki/List_of_ISO_639_language_codes) (set 1) of your language.
 ## Note for admins
 - Once account is created with your usual workflow, users need to go to `sso.domain/init` to activate their account.
 - you can give to your users link like this `https://sso.domain/init?username=john.doe&tempPassword=TempSecret123` to fill username and password fields. 
-
-## Make the opaque file
-In the current architecture, we don't have choice to do this. If you find another solution, open a PR/Issue !. We will have to use anoter stack for this app in future.
- - create directory
- - npm install @serenity-kit/opaque
-- npm install -D esbuild
-- create `client-entry.js` with
-```
-import { client, ready } from '@serenity-kit/opaque';
-
-export { client, ready };
-```
-- npx esbuild client-entry.js --bundle --format=esm --outfile=public/js/opaque.bundle.js --minify

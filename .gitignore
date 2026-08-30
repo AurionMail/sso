@@ -1,6 +1,6 @@
 .bin/
 node_modules/
-.bin/
 .idea
-lib/
+/lib/
+dist/
 .env

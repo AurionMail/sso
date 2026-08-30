@@ -5,8 +5,13 @@ import express from "express"
 
 const router = express.Router()
 
-router.get("/", (req, res) => {
-  res.render("exited", {webmailDomain: process.env.WEBMAIL_DOMAIN_WP})
+router.get("/", (req, res, next) => {
+  if (req.xhr || req.headers.accept?.includes("application/json")) {
+    return res.json({
+      webmailDomain: process.env.WEBMAIL_DOMAIN_WP || "/"
+    })
+  }
+  next()
 })
 
 export default router

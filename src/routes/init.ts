@@ -6,7 +6,7 @@ import urljoin from "url-join"
 import csrf from "csurf"
 import { Client } from "ldapts"
 import * as opaque from "@serenity-kit/opaque"
-import { setOpaque, initServerSetup } from "../opaque"
+import { setOpaque, initServerSetup } from "../opaque.js"
 
 const csrfProtection = csrf({
   cookie: {
@@ -20,13 +20,12 @@ const LDAP_USER_DN_PATTERN = process.env.LDAP_USER_DN_PATTERN || "uid={username}
 
 let serverSetup: string = ""
 
-
 opaque.ready
   .then(() => {
     serverSetup = initServerSetup()
   })
   .catch((err) => {
-    console.error("[OPAQUE] can't init in  init.ts:", err)
+    console.error("[OPAQUE] can't init in init.ts:", err)
   })
 
 async function getOrCreateServerSetup(): Promise<string> {
@@ -45,15 +44,15 @@ async function getOrCreateServerSetup(): Promise<string> {
 router.post("/start", async (req, res) => {
   try {
     const setup = await getOrCreateServerSetup()
-    const { registrationRequest } = req.body
+    const { registrationRequest, username } = req.body
 
     if (!registrationRequest) {
       return res.status(400).json({ error: "registrationRequest manquant" })
     }
 
-    const  CreateServerRegistrationResponseResult  = opaque.server.createRegistrationResponse({
+    const CreateServerRegistrationResponseResult = opaque.server.createRegistrationResponse({
       serverSetup: setup,
-      userIdentifier: req.body.username || "",
+      userIdentifier: username || "",
       registrationRequest,
     })
 
@@ -86,60 +85,55 @@ async function verifyTempPasswordLdap(username: string, tempPassword: string): P
   }
 }
 
-
-
-router.get("/", csrfProtection, (req: any, res) => {
+/**
+ * GET /init
+ */
+router.get("/", csrfProtection, (req, res, next) => {
   const queryUsername = String(req.query.username || req.query.email || "").trim().toLowerCase()
   const queryTempPassword = String(req.query.tempPassword || "")
-
   const isPreFilled = Boolean(queryUsername && queryTempPassword)
 
-  res.render("init", {
-    csrfToken: req.csrfToken(),
-    action: urljoin(process.env.BASE_URL || "", "/init"),
-    hint: queryUsername,
-    tempPassword: queryTempPassword,
-    isPreFilled: isPreFilled,
-    error: null,
-  })
+  if (req.xhr || req.headers.accept?.includes("application/json")) {
+    return res.json({
+      csrfToken: req.csrfToken(),
+      action: urljoin(process.env.BASE_URL || "", "/init"),
+      hint: queryUsername,
+      tempPassword: queryTempPassword,
+      isPreFilled,
+      error: req.query.error ? String(req.query.error) : null,
+    })
+  }
+  next()
 })
 
-router.post("/", csrfProtection, async (req: any, res, next) => {
+/**
+ * POST /init
+ */
+router.post("/", csrfProtection, async (req, res, next) => {
   const t = req.t || ((key: string) => key)
 
   const username = String(req.body.username || req.body.email || "").trim().toLowerCase()
   const tempPassword = String(req.body.tempPassword || "")
   const opaqueRegistrationRecord = String(req.body.opaqueRegistrationRecord || "")
-  const actionUrl = urljoin(process.env.BASE_URL || "", "/init")
   
-  const isPreFilled = req.body.isPreFilled === "true" || (Boolean(username) && Boolean(tempPassword))
+  const isJson = req.xhr || req.headers.accept?.includes("application/json")
 
   if (!username || !tempPassword || !opaqueRegistrationRecord) {
-    return res.render("init", {
-      csrfToken: req.csrfToken(),
-      action: actionUrl,
-      hint: username,
-      tempPassword: tempPassword,
-      isPreFilled: isPreFilled,
-      error: t("init.errors.requiredFields"),
-    })
+    const errorMsg = t("init.errors.requiredFields")
+    if (isJson) return res.status(400).json({ success: false, error: errorMsg })
+    return res.redirect(`/init?error=${encodeURIComponent(errorMsg)}`)
   }
 
   try {
-    // 1. Check temp pass with LDAP
+    // 1. Valid temp password with LDAP Bind
     const isTempPasswordValid = await verifyTempPasswordLdap(username, tempPassword)
     if (!isTempPasswordValid) {
-      return res.render("init", {
-        csrfToken: req.csrfToken(),
-        action: actionUrl,
-        hint: username,
-        tempPassword: tempPassword,
-        isPreFilled: isPreFilled,
-        error: "Invalid username or temporary password.",
-      })
+      const errorMsg = "Nom d'utilisateur ou mot de passe temporaire invalide."
+      if (isJson) return res.status(401).json({ success: false, error: errorMsg })
+      return res.redirect(`/init?error=${encodeURIComponent(errorMsg)}`)
     }
 
-    // 2. Give record to API core
+    // 2. Set OPAQUE registration record
     const result = await setOpaque(
       {
         username,
@@ -149,18 +143,18 @@ router.post("/", csrfProtection, async (req: any, res, next) => {
     )
 
     if (!result.success) {
-      return res.render("init", {
-        csrfToken: req.csrfToken(),
-        action: actionUrl,
-        hint: username,
-        tempPassword: tempPassword,
-        isPreFilled: isPreFilled,
-        error: result.message || t("init.errors.generic"),
-        webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
-      })
+      const errorMsg = result.message || t("init.errors.generic")
+      if (isJson) return res.status(400).json({ success: false, error: errorMsg })
+      return res.redirect(`/init?error=${encodeURIComponent(errorMsg)}`)
     }
 
-    return res.redirect(String(process.env.WEBMAIL_DOMAIN_WP || "/login"))
+    const redirectUrl = String(process.env.WEBMAIL_DOMAIN_WP || "/login")
+
+    if (isJson) {
+      return res.json({ success: true, redirect_to: redirectUrl })
+    }
+
+    return res.redirect(redirectUrl)
   } catch (error) {
     next(error)
   }

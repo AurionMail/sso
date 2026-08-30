@@ -3,13 +3,11 @@
 
 import express from "express"
 import url from "url"
-import urljoin from "url-join"
 import csrf from "csurf"
 import * as opaque from "@serenity-kit/opaque"
 
-import { hydraAdmin } from "../config"
-import { oidcConformityMaybeFakeAcr } from "./stub/oidc-cert"
-import { getOpaque, initServerSetup } from "../opaque"
+import { hydraAdmin } from "../config.js"
+import { getOpaque, initServerSetup } from "../opaque.js"
 
 const csrfProtection = csrf({
   cookie: {
@@ -21,8 +19,8 @@ const router = express.Router()
 let serverSetup: any = null
 opaque.ready
   .then(() => {
-    serverSetup = initServerSetup();
-      })
+    serverSetup = initServerSetup()
+  })
   .catch((err) => {
     console.error("can't init in login.ts OPAQUE WASM:", err)
   })
@@ -41,16 +39,15 @@ setInterval(() => {
   }
 }, 60000)
 
-
 /**
- * Route 1 : Init OPAQUE (Challenge KE1 -> KE2)
+ * 1 : Init OPAQUE (KE1 -> KE2)
  */
 router.post("/opaque/init", async (req, res) => {
   try {
     if (!serverSetup) {
       await opaque.ready
       if (!serverSetup) {
-        initServerSetup()
+        serverSetup = initServerSetup()
       }
     }
 
@@ -76,7 +73,7 @@ router.post("/opaque/init", async (req, res) => {
     opaqueSessions.set(sessionId, {
       serverLoginState,
       username,
-      expiresAt: Date.now() + 2 * 60 * 1000, //2min
+      expiresAt: Date.now() + 2 * 60 * 1000,
     })
 
     return res.json({
@@ -84,58 +81,60 @@ router.post("/opaque/init", async (req, res) => {
       loginResponse,
     })
   } catch (err) {
-    console.error("Erreur when OPAQUE login-init:", err)
-    return res.status(400).json({ error: "Échec de l'initialisation du challenge" })
+    console.error("Error when OPAQUE login-init:", err)
+    return res.status(400).json({ error: "Can't init challenge" })
   }
 })
 
-router.get("/", csrfProtection, (req, res, next) => {
-  const query = url.parse(req.url, true).query
-  const challenge = String(query.login_challenge)
+router.get("/", csrfProtection, async (req, res, next) => {
+  try {
+    const query = url.parse(req.url, true).query
+    const challenge = String(query.login_challenge || "")
 
-  if (!challenge) {
-    next(new Error("Expected a login challenge to be set but received none."))
-    return
-  }
+    if (!challenge) {
+      next(new Error("Expected a login challenge to be set but received none."))
+      return
+    }
 
-  hydraAdmin
-    .getOAuth2LoginRequest({ loginChallenge: challenge })
-    .then((loginRequest) => {
-      if (loginRequest.skip) {
-        return hydraAdmin
-          .acceptOAuth2LoginRequest({
-            loginChallenge: challenge,
-            acceptOAuth2LoginRequest: {
-              subject: String(loginRequest.subject),
-            },
-          })
-          .then(({ redirect_to }) => {
-            res.redirect(String(redirect_to))
-          })
-      }
+    const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
 
-      res.render("login", {
-        csrfToken: req.csrfToken(),
-        challenge: challenge,
-        action: urljoin(process.env.BASE_URL || "", "/login"),
-        hint: loginRequest.oidc_context?.login_hint || "",
-        webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
-        ssoDomain: process.env.BASE_URL || "",
+    if (loginRequest.skip) {
+      const { redirect_to } = await hydraAdmin.acceptOAuth2LoginRequest({
+        loginChallenge: challenge,
+        acceptOAuth2LoginRequest: {
+          subject: String(loginRequest.subject),
+        },
       })
-    })
-    .catch(next)
+      res.redirect(String(redirect_to))
+      return
+    }
+
+    if (req.xhr || req.headers.accept?.includes("application/json")) {
+      return res.json({
+        csrfToken: req.csrfToken(),
+        challenge,
+        hint: loginRequest.oidc_context?.login_hint || "",
+        webmailDomain: process.env.WEBMAIL_DOMAIN_WP || "",
+        initialError: req.query.error ? String(req.query.error) : "",
+      })
+    }
+
+    next()
+  } catch (err) {
+    next(err)
+  }
 })
 
 /**
- * Route 2 : (Check KE3)
+ * 2 : Valid KE3
  */
 router.post("/", csrfProtection, async (req, res, next) => {
-   if (!serverSetup) {
-      await opaque.ready
-      if (!serverSetup) {
-        serverSetup = initServerSetup();
-      }
+  if (!serverSetup) {
+    await opaque.ready
+    if (!serverSetup) {
+      serverSetup = initServerSetup()
     }
+  }
   const challenge = req.body.challenge
 
   if (req.body.submit === "Deny access" || req.body.btn_submit === "Deny access") {
@@ -158,18 +157,13 @@ router.post("/", csrfProtection, async (req, res, next) => {
   const opaqueKe3 = String(req.body.opaqueKe3 || "")
 
   const session = opaqueSessions.get(opaqueSessionId)
-  opaqueSessions.delete(opaqueSessionId) // Consommation à usage unique (burn after reading)
+  opaqueSessions.delete(opaqueSessionId)
 
   if (!session || Date.now() > session.expiresAt || session.username !== username) {
-    return res.render("login", {
-      csrfToken: req.csrfToken(),
-      challenge: challenge,
-      action: urljoin(process.env.BASE_URL || "", "/login"),
-      hint: username,
-      error: "Invalid authentication payload.",
-      webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
-      ssoDomain: process.env.BASE_URL || "",
-    })
+    if (req.xhr || req.headers.accept?.includes("application/json")) {
+      return res.status(401).json({ error: "Invalid authentication payload." })
+    }
+    return res.redirect(`/login?login_challenge=${challenge}&error=Invalid authentication payload.`)
   }
 
   let isAuthenticated = false
@@ -178,22 +172,17 @@ router.post("/", csrfProtection, async (req, res, next) => {
       finishLoginRequest: opaqueKe3,
       serverLoginState: session.serverLoginState,
     })
-    if(sessionKey) isAuthenticated = true;
+    if (sessionKey) isAuthenticated = true
   } catch (err) {
-    console.error("Échec de la validation KE3 OPAQUE:", err)
+    console.error("Can't validate KE3 OPAQUE:", err)
     isAuthenticated = false
   }
 
   if (!isAuthenticated) {
-    return res.render("login", {
-      csrfToken: req.csrfToken(),
-      challenge: challenge,
-      action: urljoin(process.env.BASE_URL || "", "/login"),
-      hint: username,
-      error: "Incorrect username or password.",
-      webmailDomain: process.env.WEBMAIL_DOMAIN_WP,
-      ssoDomain: process.env.BASE_URL || "",
-    })
+    if (req.xhr || req.headers.accept?.includes("application/json")) {
+      return res.status(401).json({ error: "Incorrect username or password." })
+    }
+    return res.redirect(`/login?login_challenge=${challenge}&error=Incorrect username or password.`)
   }
 
   try {
@@ -209,7 +198,7 @@ router.post("/", csrfProtection, async (req, res, next) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
+          Authorization: `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
         },
         body: JSON.stringify({
           encryptedData: secret,
@@ -224,18 +213,20 @@ router.post("/", csrfProtection, async (req, res, next) => {
         throw new Error(`Error API Bridge: ${response.status} ${response.statusText}`)
       }
     }
+
     const { redirect_to } = await hydraAdmin.acceptOAuth2LoginRequest({
       loginChallenge: challenge,
       acceptOAuth2LoginRequest: {
         subject: username,
-
         remember: Boolean(req.body.remember),
-        remember_for: 28800, // 8 hours
-
-        acr: oidcConformityMaybeFakeAcr(loginRequest, "0"),
+        remember_for: 28800,
+        acr: loginRequest.oidc_context?.acr_values && loginRequest.oidc_context.acr_values.length > 0 ? loginRequest.oidc_context.acr_values[ loginRequest.oidc_context.acr_values.length - 1 ] : "0",
       },
     })
 
+    if (req.xhr || req.headers.accept?.includes("application/json")) {
+      return res.json({ redirect_to })
+    }
     res.redirect(String(redirect_to))
   } catch (error) {
     next(error)
