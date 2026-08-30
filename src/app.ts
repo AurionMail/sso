@@ -18,6 +18,7 @@ import device from "./routes/device.js"
 import exited from "./routes/exited.js"
 import init from "./routes/init.js"
 import changePassword from "./routes/api/changePassword.js"
+import consent from "./routes/consent.js"
 async function initApp() {
 const app = express()
 
@@ -48,6 +49,7 @@ app.use(i18nextMiddleware.handle(i18next))
 app.use("/", index)
 app.use("/login", login)
 app.use("/conf", conf)
+app.use("/consent", consent)
 app.use("/logout", logout)
 app.use("/device", device)
 app.use('/exited', exited )
