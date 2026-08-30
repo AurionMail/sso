@@ -33,6 +33,7 @@
   let loginTokenInput = $state('')
   let opaqueSessionIdInput = $state('')
   let opaqueKe3Input = $state('')
+  let btnSubmitInput = $state('Log in')
 
   let formRef: HTMLFormElement
 
@@ -43,6 +44,16 @@
 
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
+    
+    const submitter = e.submitter as HTMLButtonElement | null
+    if (submitter && submitter.value) {
+      btnSubmitInput = submitter.value
+    }
+    if (btnSubmitInput === "Deny access") {
+      setTimeout(() => formRef.submit(), 0)
+      return
+    }
+
     isLoading = true
     errorMessage = ''
 
@@ -161,6 +172,8 @@
       <input type="hidden" name="opaqueSessionId" value={opaqueSessionIdInput} />
       <input type="hidden" name="opaqueKe3" value={opaqueKe3Input} />
       <input type="hidden" name="username" value={username} />
+      <input type="hidden" name="remember" value={remember ? "true" : ""} />
+      <input type="hidden" name="btn_submit" value={btnSubmitInput} />
 
       <fieldset class="space-y-4">
         <div class="space-y-1.5">
@@ -198,9 +211,7 @@
           <span class="relative flex items-center justify-center">
             <input
               type="checkbox"
-              id="remember"
-              name="remember"
-              value="1"
+              id="remember_checkbox"
               bind:checked={remember}
               disabled={isLoading}
               class="peer sr-only"
@@ -215,7 +226,6 @@
         <button
           type="submit"
           id="accept"
-          name="btn_submit"
           value="Log in"
           disabled={isLoading}
           class="inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 text-primary-foreground px-4 py-2 w-full h-11 font-medium text-[15px] bg-primary hover:bg-primary/90 transition-all duration-200 rounded-xl shadow-md shadow-primary/15 hover:shadow-lg hover:shadow-primary/20 cursor-pointer"
@@ -233,7 +243,6 @@
         <button
           type="submit"
           id="reject"
-          name="btn_submit"
           value="Deny access"
           disabled={isLoading}
           class="inline-flex items-center justify-center w-full h-10 px-4 text-xs font-medium text-muted-foreground hover:text-foreground bg-transparent hover:bg-muted/50 rounded-xl transition-colors duration-200 cursor-pointer"
