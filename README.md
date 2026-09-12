@@ -24,6 +24,11 @@ WEBMAIL_DOMAIN_WP=https://officialweb.mail.aurionmail.org
 CRYPTPAD_DOMAIN_WP=https://pad.aurionmail.org
 CORE_API_URL=https://aurion.mail.aurionmail.org
 CORE_API_INTERNAL_SECRET=ezfeoizrourefgzerrvettyojuipytfdesdzstrye
+#External SSO
+EXTERNAL_OIDC_ISSUER=https://sso.domain.fr
+EXTERNAL_OIDC_CLIENT_ID=client_id
+EXTERNAL_OIDC_CLIENT_SECRET=client_secret
+SESSION_SECRET=shshsshshshshze747
 # Use the /conf endpoint to get a valid OPAQUE_SERVER_SETUP value
 OPAQUE_SERVER_SETUP='bad_value'
 ```

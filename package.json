@@ -25,12 +25,14 @@
     "cors": "^2.8.6",
     "csurf": "^1.11.0",
     "express": "^4.21.2",
+    "express-session": "^1.19.0",
     "hash-wasm": "^4.12.0",
     "i18next": "^26.3.6",
     "i18next-fs-backend": "^2.6.7",
     "i18next-http-middleware": "^3.9.8",
     "ldapts": "^9.0.0",
     "morgan": "^1.10.0",
+    "openid-client": "^6.8.8",
     "url-join": "^4.0.1"
   },
   "devDependencies": {
@@ -41,6 +43,7 @@
     "@types/cors": "^2.8.19",
     "@types/csurf": "^1.9.36",
     "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
     "@types/morgan": "^1.9.10",
     "@types/node": "^26.1.1",
     "@types/url-join": "^4.0.0",
