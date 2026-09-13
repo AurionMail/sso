@@ -7,7 +7,7 @@ import csrf from "csurf"
 import * as opaque from "@serenity-kit/opaque"
 
 import { hydraAdmin } from "../config.js"
-import { getOpaque, initServerSetup } from "../opaque.js"
+import { getOpaque, initServerSetup, setOpaque } from "../opaque.js"
 
 const csrfProtection = csrf({
   cookie: {
@@ -59,7 +59,7 @@ router.post("/opaque/init", async (req, res) => {
 
     const registrationRecord = await getOpaque(username)
     if (!registrationRecord) {
-      return res.status(401).json({ error: "Identifiants invalides" })
+      return res.status(401).json({ error: "Invalid data" })
     }
 
     const { serverLoginState, loginResponse } = opaque.server.startLogin({
@@ -287,6 +287,7 @@ router.get("/oidc/redirect", async (req: any, res, next) => {
 router.get("/oidc/callback", async (req: any, res, next) => {
   try {
     const { state, code_verifier, challenge } = req.session.oidcState || {}
+    const t = req.t || ((key: string) => key)
 
     if (!challenge || !state) {
       return res.status(400).send("Invalid session.")
@@ -312,7 +313,19 @@ router.get("/oidc/callback", async (req: any, res, next) => {
       sub
     )
 
-    const username = (userInfo as any).preferred_username || userInfo.email || userInfo.sub
+    const username = (userInfo as any).preferred_username  || userInfo.sub || userInfo.email
+
+    // check if user in Core API, if not create it now
+    if(!await getOpaque(username)) {
+          console.log(`User ${username} not found in Core API, creating...`)
+          const result = await setOpaque(
+            {
+              username,
+              opaque: 'AUTH_WITH_EXTERNAL_OIDC',
+            },
+            t
+          )
+    }
 
     delete req.session.oidcState
 
