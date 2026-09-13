@@ -6,6 +6,7 @@
     csrfToken: string
     challenge: string
     action: string
+    fromExternalSSO : boolean
     webmailDomain?: string
     cryptpadDomain?: string
   }
@@ -14,6 +15,7 @@
     csrfToken,
     challenge,
     action,
+    fromExternalSSO = false,
     webmailDomain = '',
     cryptpadDomain = ''
   }: Props = $props()
@@ -38,6 +40,7 @@
       body: JSON.stringify({
         _csrf: csrfToken,
         challenge,
+        fromExternalSSO,
         submit: submitValue
       })
     })

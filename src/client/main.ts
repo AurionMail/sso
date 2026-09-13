@@ -71,6 +71,9 @@ async function init() {
 
   if (pathname.startsWith('/logout')) {
     try {
+        const searchParams = new URLSearchParams(window.location.search)
+        const fromExternalSSO = searchParams.get('external_sso') === 'true'
+
       const res = await fetch(`/logout${window.location.search}`, {
         headers: { 'Accept': 'application/json' }
       })
@@ -85,6 +88,7 @@ async function init() {
           csrfToken: data.csrfToken,
           challenge: data.challenge,
           action: data.action,
+          fromExternalSSO: fromExternalSSO,
           webmailDomain: data.webmailDomain || '',
           cryptpadDomain: data.cryptpadDomain || ''
         }
