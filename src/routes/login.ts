@@ -313,7 +313,7 @@ router.get("/oidc/callback", async (req: any, res, next) => {
       sub
     )
 
-    const username = (userInfo as any).preferred_username  || userInfo.sub || userInfo.email
+    const username = (userInfo as any).preferred_username  || userInfo.sub
 
     // check if user in Core API, if not create it now
     if(!await getOpaque(username)) {
