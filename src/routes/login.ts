@@ -7,7 +7,7 @@ import csrf from "csurf"
 import * as opaque from "@serenity-kit/opaque"
 
 import { hydraAdmin } from "../config.js"
-import { getOpaque, initServerSetup } from "../opaque.js"
+import { getOpaque, initServerSetup, setOpaque } from "../opaque.js"
 
 const csrfProtection = csrf({
   cookie: {
@@ -59,7 +59,7 @@ router.post("/opaque/init", async (req, res) => {
 
     const registrationRecord = await getOpaque(username)
     if (!registrationRecord) {
-      return res.status(401).json({ error: "Identifiants invalides" })
+      return res.status(401).json({ error: "Invalid data" })
     }
 
     const { serverLoginState, loginResponse } = opaque.server.startLogin({
@@ -94,6 +94,12 @@ router.get("/", csrfProtection, async (req, res, next) => {
     if (!challenge) {
       next(new Error("Expected a login challenge to be set but received none."))
       return
+    }
+
+    if (process.env.EXTERNAL_OIDC_ISSUER) {
+      const oidcRedirectUrl = `/login/oidc/redirect?login_challenge=${encodeURIComponent(challenge)}`
+
+      return res.redirect(oidcRedirectUrl)
     }
 
     const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
@@ -230,6 +236,143 @@ router.post("/", csrfProtection, async (req, res, next) => {
     res.redirect(String(redirect_to))
   } catch (error) {
     next(error)
+  }
+})
+
+
+
+//------------ OIDC-------------------
+import * as client from "openid-client"
+
+let config: client.Configuration
+
+async function initExternalOidc() {
+  config = await client.discovery(
+    new URL(process.env.EXTERNAL_OIDC_ISSUER!),
+    process.env.EXTERNAL_OIDC_CLIENT_ID!,
+    process.env.EXTERNAL_OIDC_CLIENT_SECRET!
+  )
+}
+initExternalOidc().catch((err) => console.error("error init OIDC:", err))
+
+router.get("/oidc/redirect", async (req: any, res, next) => {
+  try {
+    const challenge = String(req.query.login_challenge || "")
+    if (!challenge) return res.status(400).send("No challenge provided.")
+
+    const code_verifier = client.randomPKCECodeVerifier()
+    const code_challenge = await client.calculatePKCECodeChallenge(code_verifier)
+    const state = client.randomState()
+
+    req.session.oidcState = {
+      state,
+      code_verifier,
+      challenge,
+    }
+
+    const redirectTo = client.buildAuthorizationUrl(config, {
+      redirect_uri: `${process.env.APP_BASE_URL}/login/oidc/callback`,
+      scope: "openid profile email",
+      state,
+      code_challenge,
+      code_challenge_method: "S256",
+    })
+
+    res.redirect(redirectTo.href)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get("/oidc/callback", async (req: any, res, next) => {
+  try {
+    const { state, code_verifier, challenge } = req.session.oidcState || {}
+    const t = req.t || ((key: string) => key)
+
+    if (!challenge || !state) {
+      return res.status(400).send("Invalid session.")
+    }
+
+    const currentUrl = new URL(req.protocol + "://" + req.get("host") + req.originalUrl)
+
+    const tokenSet = await client.authorizationCodeGrant(config, currentUrl, {
+      pkceCodeVerifier: code_verifier,
+      expectedState: state,
+    })
+
+    const claims = tokenSet.claims()
+    const sub = claims?.sub
+
+    if (!sub) {
+      throw new Error("No claim 'sub'.")
+    }
+
+    const userInfo = await client.fetchUserInfo(
+      config,
+      tokenSet.access_token,
+      sub
+    )
+
+    const username = (userInfo as any).preferred_username  || userInfo.sub
+
+    // check if user in Core API, if not create it now
+    if(!await getOpaque(username)) {
+          console.log(`User ${username} not found in Core API, creating...`)
+          const result = await setOpaque(
+            {
+              username,
+              opaque: 'AUTH_WITH_EXTERNAL_OIDC',
+            },
+            t
+          )
+    }
+
+    delete req.session.oidcState
+
+    const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
+
+    const { redirect_to } = await hydraAdmin.acceptOAuth2LoginRequest({
+      loginChallenge: challenge,
+      acceptOAuth2LoginRequest: {
+        subject: String(username),
+        remember: true,
+        remember_for: 28800,
+        acr: loginRequest.oidc_context?.acr_values?.[0] || "1",
+      },
+    })
+
+    const coreApiToken = crypto.randomUUID()
+    const apiUrl = `${process.env.CORE_API_URL}/api/internal/bridge/secret`
+
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.CORE_API_INTERNAL_SECRET}`,
+      },
+      body: JSON.stringify({
+        encryptedData: "",
+        ttlSeconds: 300,
+        id: crypto.randomUUID(),
+        loginToken: coreApiToken,
+        username: username,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Error API Bridge: ${response.status} ${response.statusText}`)
+    }
+
+    const ssoParams = new URLSearchParams({
+      redirect_to: String(redirect_to),
+      core_api_token: coreApiToken,
+      webmail_domain: process.env.WEBMAIL_DOMAIN_WP || "",
+    })
+
+    res.redirect(`/login/oidc/sso?${ssoParams.toString()}`)
+  } catch (err: any) {
+    console.error("external OIDC callback error :", err)
+    res.redirect(`/login/oidc/sso?error=${encodeURIComponent(err.message || "Authentication failed")}`)
   }
 })
 

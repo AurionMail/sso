@@ -9,6 +9,7 @@ import bodyParser from "body-parser"
 import i18next from "i18next"
 import * as i18nextMiddleware from "i18next-http-middleware"
 import Backend from "i18next-fs-backend"
+import session from "express-session"
 
 import conf from "./routes/conf.js"
 import index from "./routes/index.js"
@@ -43,6 +44,20 @@ app.use(logger("dev"))
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: false }))
 app.use(cookieParser())
+app.use(
+  session({
+    name: "external_oidc_workflow",
+    secret: process.env.SESSION_SECRET || "DEFAULT_INSECURE_SECRET",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 10 * 60 * 1000,
+      sameSite: "lax",
+    },
+  })
+)
 app.use('/public', express.static(path.join(import.meta.dirname,'..', "public")))
 
 app.use(i18nextMiddleware.handle(i18next))

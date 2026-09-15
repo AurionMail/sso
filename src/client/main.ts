@@ -6,6 +6,7 @@ import Logout from './pages/Logout.svelte'
 import LogoutAll from './pages/LogoutAll.svelte'
 import Exited from './pages/Exited.svelte'
 import CloseWindow from './pages/CloseWindow.svelte'
+import SSO from './pages/SSO.svelte'
 
 async function init() {
   const appTarget = document.getElementById('app')
@@ -68,9 +69,11 @@ async function init() {
     return
   }
 
-  // 2. Route /logout
   if (pathname.startsWith('/logout')) {
     try {
+        const searchParams = new URLSearchParams(window.location.search)
+        const fromExternalSSO = searchParams.get('external_sso') === 'true'
+
       const res = await fetch(`/logout${window.location.search}`, {
         headers: { 'Accept': 'application/json' }
       })
@@ -85,20 +88,35 @@ async function init() {
           csrfToken: data.csrfToken,
           challenge: data.challenge,
           action: data.action,
+          fromExternalSSO: fromExternalSSO,
           webmailDomain: data.webmailDomain || '',
           cryptpadDomain: data.cryptpadDomain || ''
         }
       })
     } catch (err) {
-      console.error('Erreur lors du montage de /logout :', err)
+      console.error(err)
       appTarget.innerHTML = `<div class="p-4 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm">Impossible de charger la page de déconnexion.</div>`
     }
     return
   }
 
+  if (pathname.startsWith('/login/oidc/sso')) {
+    const searchParams = new URLSearchParams(window.location.search)
+
+    mount(SSO, {
+      target: appTarget,
+      props: {
+        webmailDomain: searchParams.get('webmail_domain') || '',
+        redirect_to: searchParams.get('redirect_to') || '',
+        Core_API_token: searchParams.get('core_api_token') || '',
+        errorMessage: searchParams.get('error') || ''
+      }
+    })
+    return
+  }
+
   if (pathname.startsWith('/init')) {
     try {
-      const searchParams = new URLSearchParams(window.location.search)
       const res = await fetch(`/init${window.location.search}`, {
         headers: { 'Accept': 'application/json' }
       })
@@ -146,7 +164,6 @@ async function init() {
 
     const data = await res.json()
 
-    // Si Ory Hydra ordonne une redirection immédiate
     if (data.redirect_to) {
       window.location.href = data.redirect_to
       return
