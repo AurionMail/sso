@@ -271,7 +271,7 @@ router.get("/oidc/redirect", async (req: any, res, next) => {
     }
 
     const redirectTo = client.buildAuthorizationUrl(config, {
-      redirect_uri: `${process.env.APP_BASE_URL}/login/oidc/callback`,
+      redirect_uri: `${process.env.BASE_URL}/login/oidc/callback`,
       scope: "openid profile email",
       state,
       code_challenge,
