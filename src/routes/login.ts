@@ -31,6 +31,19 @@ interface OpaqueSession {
   expiresAt: number
 }
 const opaqueSessions = new Map<string, OpaqueSession>()
+interface ExternalOidcSession {
+  challenge: string
+  code_verifier: string
+  expiresAt: number
+}
+const oidcStateStore = new Map<string, ExternalOidcSession>()
+
+setInterval(() => {
+  const now = Date.now()
+  for (const [id, sess] of oidcStateStore.entries()) {
+    if (now > sess.expiresAt) oidcStateStore.delete(id)
+  }
+}, 5 * 60 * 1000)
 
 setInterval(() => {
   const now = Date.now()
@@ -243,7 +256,6 @@ router.post("/", csrfProtection, async (req, res, next) => {
 
 //------------ OIDC-------------------
 import * as client from "openid-client"
-import { decryptState, encryptState } from "../crypto.js"
 
 let config: client.Configuration
 
@@ -264,17 +276,17 @@ router.get("/oidc/redirect", async (req: any, res, next) => {
     const code_verifier = client.randomPKCECodeVerifier()
     const code_challenge = await client.calculatePKCECodeChallenge(code_verifier)
 
-    const statePayload = {
+    const stateId = crypto.randomUUID()
+    oidcStateStore.set(stateId, {
       challenge,
       code_verifier,
-      exp: Date.now() + 10 * 60 * 1000,
-    }
-    const encryptedState = encryptState(statePayload)
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    })
 
     const redirectTo = client.buildAuthorizationUrl(config, {
       redirect_uri: `${process.env.BASE_URL}/login/oidc/callback`,
       scope: "openid profile email",
-      state: encryptedState,
+      state: stateId,
       code_challenge,
       code_challenge_method: "S256",
     })
@@ -292,16 +304,12 @@ router.get("/oidc/callback", async (req: any, res, next) => {
       return res.status(400).send("Missing state parameter.")
     }
 
-    let stateData: { challenge: string; code_verifier: string; exp: number }
-    try {
-      stateData = decryptState(rawState)
-    } catch (err) {
-      return res.status(400).send("Invalid or corrupted state.")
+    const stateData = oidcStateStore.get(rawState)
+    if (!stateData) {
+      return res.status(400).send("Invalid or corrupted state, or you have been too slow.")
     }
 
-    const { challenge, code_verifier, exp } = stateData
-
-    if (Date.now() > exp) {
+    if (Date.now() > stateData.expiresAt) {
       return res.status(400).send("State expired.")
     }
 
@@ -309,7 +317,7 @@ router.get("/oidc/callback", async (req: any, res, next) => {
     const currentUrl = new URL(req.protocol + "://" + req.get("host") + req.originalUrl)
 
     const tokenSet = await client.authorizationCodeGrant(config, currentUrl, {
-      pkceCodeVerifier: code_verifier,
+      pkceCodeVerifier: stateData.code_verifier,
       expectedState: rawState,
     })
 
@@ -340,10 +348,10 @@ router.get("/oidc/callback", async (req: any, res, next) => {
       )
     }
 
-    const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
+    const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: stateData.challenge })
 
     const { redirect_to } = await hydraAdmin.acceptOAuth2LoginRequest({
-      loginChallenge: challenge,
+      loginChallenge: stateData.challenge,
       acceptOAuth2LoginRequest: {
         subject: String(username),
         remember: true,
