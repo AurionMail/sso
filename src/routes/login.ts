@@ -243,6 +243,7 @@ router.post("/", csrfProtection, async (req, res, next) => {
 
 //------------ OIDC-------------------
 import * as client from "openid-client"
+import { decryptState, encryptState } from "../crypto.js"
 
 let config: client.Configuration
 
@@ -262,19 +263,18 @@ router.get("/oidc/redirect", async (req: any, res, next) => {
 
     const code_verifier = client.randomPKCECodeVerifier()
     const code_challenge = await client.calculatePKCECodeChallenge(code_verifier)
-    const state = client.randomState()
 
-    req.session.oidcState = {
-      state,
-      code_verifier,
+    const statePayload = {
       challenge,
+      code_verifier,
+      exp: Date.now() + 10 * 60 * 1000,
     }
-    await req.session.save();
+    const encryptedState = encryptState(statePayload)
 
     const redirectTo = client.buildAuthorizationUrl(config, {
       redirect_uri: `${process.env.BASE_URL}/login/oidc/callback`,
       scope: "openid profile email",
-      state,
+      state: encryptedState,
       code_challenge,
       code_challenge_method: "S256",
     })
@@ -287,18 +287,30 @@ router.get("/oidc/redirect", async (req: any, res, next) => {
 
 router.get("/oidc/callback", async (req: any, res, next) => {
   try {
-    const { state, code_verifier, challenge } = req.session.oidcState || {}
-    const t = req.t || ((key: string) => key)
-
-    if (!challenge || !state) {
-      return res.status(400).send("Invalid session.")
+    const rawState = String(req.query.state || "")
+    if (!rawState) {
+      return res.status(400).send("Missing state parameter.")
     }
 
+    let stateData: { challenge: string; code_verifier: string; exp: number }
+    try {
+      stateData = decryptState(rawState)
+    } catch (err) {
+      return res.status(400).send("Invalid or corrupted state.")
+    }
+
+    const { challenge, code_verifier, exp } = stateData
+
+    if (Date.now() > exp) {
+      return res.status(400).send("State expired.")
+    }
+
+    const t = req.t || ((key: string) => key)
     const currentUrl = new URL(req.protocol + "://" + req.get("host") + req.originalUrl)
 
     const tokenSet = await client.authorizationCodeGrant(config, currentUrl, {
       pkceCodeVerifier: code_verifier,
-      expectedState: state,
+      expectedState: rawState,
     })
 
     const claims = tokenSet.claims()
@@ -317,18 +329,16 @@ router.get("/oidc/callback", async (req: any, res, next) => {
     const username = (userInfo as any).preferred_username  || userInfo.sub
 
     // check if user in Core API, if not create it now
-    if(!await getOpaque(username)) {
-          console.log(`User ${username} not found in Core API, creating...`)
-          const result = await setOpaque(
-            {
-              username,
-              opaque: 'AUTH_WITH_EXTERNAL_OIDC',
-            },
-            t
-          )
+    if(!(await getOpaque(username))) {
+      console.log(`User ${username} not found in Core API, creating...`)
+      await setOpaque(
+        {
+          username,
+          opaque: "AUTH_WITH_EXTERNAL_OIDC",
+        },
+        t
+      )
     }
-
-    delete req.session.oidcState
 
     const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
 
