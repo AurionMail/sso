@@ -269,6 +269,7 @@ router.get("/oidc/redirect", async (req: any, res, next) => {
       code_verifier,
       challenge,
     }
+    await req.session.save();
 
     const redirectTo = client.buildAuthorizationUrl(config, {
       redirect_uri: `${process.env.BASE_URL}/login/oidc/callback`,

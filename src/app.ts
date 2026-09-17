@@ -23,6 +23,7 @@ import consent from "./routes/consent.js"
 async function initApp() {
 const app = express()
 
+app.set("trust proxy", 1)
 i18next
   .use(Backend)
   .use(i18nextMiddleware.LanguageDetector)
@@ -51,10 +52,10 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
+      secure: true,
       httpOnly: true,
       maxAge: 10 * 60 * 1000,
-      sameSite: "lax",
+      sameSite: "none",
     },
   })
 )
