@@ -282,7 +282,6 @@ router.get("/oidc/redirect", async (req: any, res, next) => {
       code_verifier,
       expiresAt: Date.now() + 10 * 60 * 1000,
     })
-
     const redirectTo = client.buildAuthorizationUrl(config, {
       redirect_uri: `${process.env.BASE_URL}/login/oidc/callback`,
       scope: "openid profile email",
@@ -314,7 +313,8 @@ router.get("/oidc/callback", async (req: any, res, next) => {
     }
 
     const t = req.t || ((key: string) => key)
-    const currentUrl = new URL(req.protocol + "://" + req.get("host") + req.originalUrl)
+
+    const currentUrl = new URL(req.originalUrl, process.env.BASE_URL)
 
     const tokenSet = await client.authorizationCodeGrant(config, currentUrl, {
       pkceCodeVerifier: stateData.code_verifier,
