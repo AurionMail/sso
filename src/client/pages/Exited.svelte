@@ -2,9 +2,10 @@
 import { t } from '../lib/i18n.js'
   interface Props {
     webmailDomain?: string
+    externalSSOURL?: string
   }
 
-  let { webmailDomain = '/' }: Props = $props()
+  let { webmailDomain = '/', externalSSOURL = '' }: Props = $props()
 </script>
 
 <div class="rounded-2xl border border-border/60 bg-background/80 backdrop-blur-sm shadow-xl shadow-black/5 dark:shadow-black/20 overflow-hidden w-full max-w-md">
@@ -40,6 +41,21 @@ import { t } from '../lib/i18n.js'
           <span>{$t('loggedOut.reconnect')}</span>
         </div>
       </a>
+      {#if externalSSOURL !== ''}
+      <a
+        href={externalSSOURL}
+        class="inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-primary-foreground px-4 py-2 w-full h-11 font-medium text-[15px] bg-primary hover:bg-primary/90 transition-all duration-200 rounded-xl shadow-md shadow-primary/15 hover:shadow-lg hover:shadow-primary/20 cursor-pointer"
+      >
+        <div class="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4" aria-hidden="true">
+            <path d="m10 17 5-5-5-5"></path>
+            <path d="M15 12H3"></path>
+            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+          </svg>
+          <span>{$t('loggedOut.fromExt')}</span>
+        </div>
+      </a>
+      {/if}
     </div>
   </div>
 </div>

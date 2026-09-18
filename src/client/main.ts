@@ -32,7 +32,8 @@ async function init() {
       mount(Exited, {
         target: appTarget,
         props: {
-          webmailDomain: data.webmailDomain || '/'
+          webmailDomain: data.webmailDomain || '/',
+          externalSSOURL: data.externalSSOURL || ''
         }
       })
     } catch (err) {

@@ -24,7 +24,8 @@
     "title": "Logged out successfully",
     "subtitle": "You have been safely logged out from Aurion SSO.",
     "securityNotice": "For security reasons, please close all browser windows if you were on a shared computer.",
-    "reconnect": "Log in again"
+    "reconnect": "Log in again",
+    "fromExt" : "Logout from central SSO"
   },
   "closeWindow": {
     "title": "Operation cancelled",

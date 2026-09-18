@@ -8,7 +8,8 @@ const router = express.Router()
 router.get("/", (req, res, next) => {
   if (req.xhr || req.headers.accept?.includes("application/json")) {
     return res.json({
-      webmailDomain: process.env.WEBMAIL_DOMAIN_WP || "/"
+      webmailDomain: process.env.WEBMAIL_DOMAIN_WP || "/",
+      externalSSOURL: process.env.EXTERNAL_OIDC_LOGOUT_URI || ""
     })
   }
   next()
