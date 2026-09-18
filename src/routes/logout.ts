@@ -79,8 +79,7 @@ router.post("/", csrfProtection, (req, res, next) => {
       if (isJson) {
         return res.json({ success: true, redirect_to: finalRedirectUrl })
       }
-
-      // Sinon, faire la redirection HTTP directe
+      
       return res.redirect(finalRedirectUrl)
     })
     .catch(next)
