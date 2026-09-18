@@ -71,13 +71,13 @@ router.post("/", csrfProtection, (req, res, next) => {
          const FullredirectUrl = new URL(process.env.EXTERNAL_OIDC_FULL_LOGOUT_URI)
         FullredirectUrl.searchParams.set('from_aurion', 'true')
         return res.redirect(String(FullredirectUrl))
-      }
-      if(process.env.EXTERNAL_OIDC_LOGOUT_URI) {
+      } else if(process.env.EXTERNAL_OIDC_LOGOUT_URI) {
         const redirectUrl = new URL(process.env.EXTERNAL_OIDC_LOGOUT_URI)
         redirectUrl.searchParams.set('from_aurion', 'true')
         return res.redirect(String(redirectUrl))
-      }
+      } else {
       res.redirect(String(redirect_to))
+      }
     })
     .catch(next)
 })
