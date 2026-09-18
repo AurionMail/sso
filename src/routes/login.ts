@@ -109,12 +109,6 @@ router.get("/", csrfProtection, async (req, res, next) => {
       return
     }
 
-    if (process.env.EXTERNAL_OIDC_ISSUER) {
-      const oidcRedirectUrl = `/login/oidc/redirect?login_challenge=${encodeURIComponent(challenge)}`
-
-      return res.redirect(oidcRedirectUrl)
-    }
-
     const loginRequest = await hydraAdmin.getOAuth2LoginRequest({ loginChallenge: challenge })
 
     if (loginRequest.skip) {
@@ -126,6 +120,11 @@ router.get("/", csrfProtection, async (req, res, next) => {
       })
       res.redirect(String(redirect_to))
       return
+    }
+
+    if (process.env.EXTERNAL_OIDC_ISSUER) {
+      const oidcRedirectUrl = `/login/oidc/redirect?login_challenge=${encodeURIComponent(challenge)}`
+      return res.redirect(oidcRedirectUrl)
     }
 
     if (req.xhr || req.headers.accept?.includes("application/json")) {
